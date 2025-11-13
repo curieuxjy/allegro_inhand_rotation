@@ -20,7 +20,7 @@ from hora.utils.misc import tprint
 
 
 # =========================================================
-# 변환/재배열 유틸
+# Conversion/rearrangement utility
 # =========================================================
 
 def _action_hora2allegro(actions):
@@ -60,7 +60,7 @@ def _reorder_timr2imrt(timr):
 
 
 # =========================================================
-# 제어 에이전트 (Timer 기반)
+# Control agent (Timer-based)
 # =========================================================
 
 class HardwarePlayer:
@@ -133,23 +133,23 @@ class HardwarePlayer:
         self.prev_target = self.cur_target
 
     def _post_physics_step(self, obses):
-        # 1) 현재 관측 정규화 (obses: (16,) 또는 (1,16) 텐서 on self.device)
-        #    결과를 (1,16)로 보장
+        # 1) Normalize current observation (obses: (16,) or (1,16) tensor on self.device)
+        #    Ensure the result is (1,16)
         cur_obs = self._unscale(
             obses.view(-1), self.allegro_dof_lower, self.allegro_dof_upper
         ).view(1, 16)
 
-        # 2) obs_buf 롤링 (96 = 32*3)
+        # 2) Roll obs_buf (96 = 32*3)
         #    [0:64] <- [32:96],  [64:80] <- cur_obs,  [80:96] <- cur_target
-        #    ⚠️ 겹침 방지: 소스 부분을 먼저 clone() 해서 임시 보관
+        #    ⚠️ To prevent overlap: first clone() the source part to store it temporarily
         src64 = self.obs_buf[:, 32:96].clone()     # (1,64)
-        self.obs_buf[:, 0:64] = src64              # 앞 64칸으로 당김
-        self.obs_buf[:, 64:80] = cur_obs           # 현재 관측(정규화)
-        self.obs_buf[:, 80:96] = self.cur_target   # 최신 타깃(rad)
+        self.obs_buf[:, 0:64] = src64              # Pull to the front 64 cells
+        self.obs_buf[:, 64:80] = cur_obs           # Current observation (normalized)
+        self.obs_buf[:, 80:96] = self.cur_target   # Latest target (rad)
 
-        # 3) proprio_hist_buf 롤링 (T=30)
-        #    [:, 0:-1, :] <- [:, 1:, :];  마지막 step에 [cur_obs | cur_target]
-        #    ⚠️ 동일 텐서 내 겹침 방지: 소스 clone()
+        # 3) Roll proprio_hist_buf (T=30)
+        #    [:, 0:-1, :] <- [:, 1:, :];  at the last step [cur_obs | cur_target]
+        #    ⚠️ To prevent overlap within the same tensor: clone() the source
         src_hist = self.proprio_hist_buf[:, 1:, :].clone()  # (1,29,32)
         self.proprio_hist_buf[:, 0:-1, :] = src_hist
         self.proprio_hist_buf[:, -1, :16] = cur_obs
@@ -173,13 +173,13 @@ class HardwarePlayer:
         # 3) update target
         self._pre_physics_step(action)
 
-        # 4) publish command (CPU로만 내릴 때 변환)
+        # 4) publish command (convert when sending to CPU only)
         cmd = self.cur_target.detach().to("cpu").numpy()[0]
         ros1 = _action_hora2allegro(cmd)
         ros2 = _reorder_imrt2timr(ros1)
         self.allegro.command_joint_position(ros2)
 
-        # 5) non-blocking obs update (드랍 시 마지막 유효 관측 사용)
+        # 5) non-blocking obs update (use last valid observation on drop)
         q_pos = self.allegro.poll_joint_position(wait=False, timeout=0.0)
         if q_pos is not None:
             ros1_q = _reorder_timr2imrt(q_pos)
@@ -199,7 +199,7 @@ class HardwarePlayer:
         else:
             dt = t0 - self._last_step_t
             self._last_step_t = t0
-            # 5초마다 한 번만 출력
+            # Print only once every 5 seconds
             if int(time.time()) % 5 == 0:
                 hz_est = 1.0 / max(dt, 1e-6)
                 print(f"[timer] {hz_est:.2f} Hz, skipped={self._skipped}")
@@ -210,10 +210,10 @@ class HardwarePlayer:
         run_start_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
         print(f"🧠 Starting HardwarePlayer deployment at {run_start_time}...")
 
-        # ROS2 I/O 시작(백그라운드 실행기)
+        # Start ROS2 I/O (background executor)
         self.allegro = start_allegro_io(side='right')
 
-        # 워밍업(블로킹) — 하드웨어 settle
+        # Warm-up (blocking) — settle hardware
         warmup = int(self.hz * 4)
         for t in range(warmup):
             tprint(f"setup {t} / {warmup}")
@@ -221,7 +221,7 @@ class HardwarePlayer:
             self.allegro.command_joint_position(pose)
             time.sleep(1.0 / self.hz)
 
-        # 첫 관측(블로킹 1회 — 초기화 안정)
+        # First observation (blocking once — initialization stability)
         q_pos = self.allegro.poll_joint_position(wait=True, timeout=5.0)
         if q_pos is None:
             print("❌ failed to read joint state.")
@@ -233,7 +233,7 @@ class HardwarePlayer:
         obs_q = torch.from_numpy(hora_q.astype(np.float32)).to(self.device)
         self._last_obs_q = obs_q
 
-        # buffers 초기화
+        # Initialize buffers
         cur_obs_buf = self._unscale(obs_q, self.allegro_dof_lower, self.allegro_dof_upper)[None]
         self.prev_target = obs_q[None]
         for i in range(3):
@@ -242,12 +242,12 @@ class HardwarePlayer:
         self.proprio_hist_buf[:, :, :16] = cur_obs_buf
         self.proprio_hist_buf[:, :, 16:32] = self.prev_target
 
-        # Timer 등록 (정확 주기)
+        # Register Timer (accurate frequency)
         period = 1.0 / self.hz
         self.timer = self.allegro.create_timer(period, self._control_step)
         print(f"Deployment started (timer-based {self.hz:.1f} Hz). Ctrl+C to stop.")
 
-        # 메인 스레드: 시그널 처리 + 유지
+        # Main thread: signal handling + keep alive
         interrupted = False
 
         def _sigint(_sig, _frm):
@@ -295,11 +295,11 @@ class HardwarePlayer:
 
 
 # =========================================================
-# 실행 예시
+# Execution example
 # =========================================================
 if __name__ == "__main__":
-    # 예: CUDA가 없으면 device="cpu"로 변경
+    # Example: If CUDA is not available, change device to "cpu"
     agent = HardwarePlayer(hz=20.0, device="cuda" if torch.cuda.is_available() else "cpu")
-    # 필요한 경우 체크포인트 로드
+    # Load checkpoint if necessary
     # agent.restore("/path/to/checkpoint.pth")
     agent.deploy()

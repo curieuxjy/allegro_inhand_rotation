@@ -17,7 +17,7 @@ from std_msgs.msg import Float64MultiArray
 
 
 # =========================================================
-# Allegro ROS2 I/O (백그라운드 스피너 + position_gap 퍼블리셔)
+# Allegro ROS2 I/O (background spinner + position_gap publisher)
 # =========================================================
 
 DEFAULT_ORDER = {
@@ -31,7 +31,7 @@ DEFAULT_ORDER = {
 
 
 class AllegroHandIO(Node):
-    """ROS2 Allegro I/O 노드: 명령 퍼블리시 + joint_states 구독 + /position_gap 퍼블리시"""
+    """ROS2 Allegro I/O Node: Publish commands + subscribe to joint_states + publish /position_gap"""
     def __init__(
         self,
         side: str = "right",
@@ -63,7 +63,7 @@ class AllegroHandIO(Node):
 
         self._desired_names = DEFAULT_ORDER["right"]
 
-        # 안전 포즈
+        # Safe pose
         self.safe_pose = np.array([
             0.5, 0.2, 0.0, 0.0,   # Thumb
             0.0, 0.0, 0.0, 0.0,   # Index
@@ -78,7 +78,7 @@ class AllegroHandIO(Node):
 
     # ---------- public ----------
     def command_joint_position(self, positions: List[float]) -> bool:
-        """16D 목표 자세 퍼블리시 + 직후 1회 gap 퍼블리시"""
+        """Publish 16D target pose + publish gap once immediately after"""
         try:
             data = [float(x) for x in positions]
         except Exception:
@@ -93,14 +93,14 @@ class AllegroHandIO(Node):
         self._cmd_pub.publish(msg)
         self._last_cmd = np.asarray(data, dtype=float)
 
-        # 현재 최신 상태로 gap 한번 퍼블리시(논블로킹)
+        # Publish gap once with the latest state (non-blocking)
         self._publish_position_gap()
         return True
 
     def poll_joint_position(self, wait: bool = False, timeout: float = 0.0) -> Optional[np.ndarray]:
-        """현재 조인트를 Allegro 순서(16D)로 반환"""
+        """Return current joints in Allegro order (16D)"""
         if self._last_js is None and wait:
-            # timer 콜백에서 블로킹은 권장하지 않으나, 초기화 시에는 사용 가능
+            # Blocking is not recommended in timer callbacks, but can be used for initialization
             end_t = time.perf_counter() + max(0.0, float(timeout))
             while self._last_js is None and time.perf_counter() < end_t:
                 rclpy.spin_once(self, timeout_sec=0.02)
@@ -157,7 +157,7 @@ class AllegroHandIO(Node):
         self._gap_pub.publish(js)
 
 
-# ========== FIX: Runner를 표준 threading 기반으로 ==========
+# ========== FIX: Runner to standard threading based ==========
 
 import threading
 from rclpy.executors import SingleThreadedExecutor
@@ -174,12 +174,12 @@ class _Runner:
 
     def stop(self):
         try:
-            self.exec.shutdown()          # executor 중지
+            self.exec.shutdown()          # Stop executor
         finally:
             try:
-                self.node.destroy_node()  # 노드 파괴
+                self.node.destroy_node()  # Destroy node
             finally:
-                # 백그라운드 스레드 종료 대기 (너무 오래 기다리지 않도록 타임아웃)
+                # Wait for background thread to terminate (with a timeout to avoid waiting too long)
                 self.thread.join(timeout=2.0)
 
 

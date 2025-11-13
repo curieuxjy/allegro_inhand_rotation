@@ -39,7 +39,7 @@ OmegaConf.register_new_resolver(
     "resolve_default", lambda default, arg: default if arg == "" else arg
 )
 
-# PATH=./configs, main 함수 내에서 config 변수로 작동
+# PATH=./configs, works as a config variable within the main function
 @hydra.main(config_name="config", config_path="configs")
 def main(config: DictConfig):
     if config.checkpoint:

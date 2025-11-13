@@ -316,32 +316,32 @@ class PPO(object):
                 mu = res_dict["mus"]
                 sigma = res_dict["sigmas"]
 
-                # --- PPO-Clip의 핵심 손실 계산 ---
-                # Actor 손실 (정책 손실)
-                # 이전 정책과 새 정책의 확률 비율(ratio)을 계산합니다.
+                # --- Core loss calculation of PPO-Clip ---
+                # Actor loss (policy loss)
+                # Calculate the probability ratio (ratio) between the old policy and the new policy.
                 ratio = torch.exp(old_action_log_probs - action_log_probs)
-                # 클리핑되지 않은 일반적인 정책 그래디언트 손실
+                # Unclipped general policy gradient loss
                 surr1 = advantage * ratio
-                # 확률 비율을 [1-e_clip, 1+e_clip] 범위로 클리핑하여 정책이 급격하게 변하는 것을 방지합니다.
+                # Clip the probability ratio to the range [1-e_clip, 1+e_clip] to prevent the policy from changing too drastically.
                 surr2 = advantage * torch.clamp(
                     ratio, 1.0 - self.e_clip, 1.0 + self.e_clip
                 )
-                # 두 손실 중 더 비관적인(pessimistic) 값을 선택하여 안정적인 학습을 유도합니다.
+                # Choose the more pessimistic (pessimistic) of the two losses to induce stable learning.
                 a_loss = torch.max(-surr1, -surr2)
 
-                # Critic 손실 (가치 손실)
-                # 가치 예측값 또한 급격하게 변하지 않도록 클리핑합니다.
+                # Critic loss (value loss)
+                # Also clip the value prediction to prevent it from changing too drastically.
                 value_pred_clipped = value_preds + (values - value_preds).clamp(
                     -self.e_clip, self.e_clip
                 )
-                # 클리핑되지 않은 가치 손실 (예측값과 실제 리턴의 제곱 오차)
+                # Unclipped value loss (squared error between predicted value and actual return)
                 value_losses = (values - returns) ** 2
-                # 클리핑된 가치 손실
+                # Clipped value loss
                 value_losses_clipped = (value_pred_clipped - returns) ** 2
-                # 두 가치 손실 중 더 큰 값을 사용하여 안정성을 높입니다.
+                # Use the larger of the two value losses to increase stability.
                 c_loss = torch.max(value_losses, value_losses_clipped)
 
-                # Bounded loss (행동 범위 제한 손실)
+                # Bounded loss (action range limit loss)
                 if self.bounds_loss_coef > 0:
                     soft_bound = 1.1
                     mu_loss_high = torch.clamp_max(mu - soft_bound, 0.0) ** 2
@@ -350,13 +350,13 @@ class PPO(object):
                 else:
                     b_loss = 0
 
-                # 각 손실의 평균을 계산합니다.
+                # Calculate the mean of each loss.
                 a_loss, c_loss, entropy, b_loss = [
                     torch.mean(loss) for loss in [a_loss, c_loss, entropy, b_loss]
                 ]
 
-                # 최종 손실: Actor 손실 + Critic 손실 - 엔트로피 보너스 + 행동 범위 제한 손실
-                # 엔트로피 보너스는 정책이 너무 확정적으로 변하는 것을 막아 탐험을 장려하는 역할을 합니다.
+                # Final loss: Actor loss + Critic loss - Entropy bonus + Action range limit loss
+                # The entropy bonus encourages exploration by preventing the policy from becoming too deterministic.
                 loss = (
                     a_loss
                     + 0.5 * c_loss * self.critic_coef
@@ -395,27 +395,27 @@ class PPO(object):
         return a_losses, c_losses, b_losses, entropies, kls
 
     def play_steps(self):
-        # --- 경험 수집 단계 (Rollout) ---
-        # horizon_length 만큼의 타임스텝 동안 환경과 상호작용하며 데이터를 수집합니다.
+        # --- Experience Collection Step (Rollout) ---
+        # Interact with the environment for horizon_length timesteps and collect data.
         for n in range(self.horizon_length):
-            # 현재 관측(obs)을 바탕으로 정책(모델)이 행동(action)과 가치(value) 등을 추론합니다.
+            # Based on the current observation (obs), the policy (model) infers action, value, etc.
             res_dict = self.model_act(self.obs)
 
-            # 현재 스텝의 데이터(관측, 행동, 가치, 행동의 로그 확률 등)를 ExperienceBuffer에 저장합니다.
+            # Save the current step's data (observation, action, value, log probability of action, etc.) to the ExperienceBuffer.
             self.storage.update_data("obses", n, self.obs["obs"])
             self.storage.update_data("priv_info", n, self.obs["priv_info"])
             for k in ["actions", "neglogpacs", "values", "mus", "sigmas"]:
                 self.storage.update_data(k, n, res_dict[k])
 
-            # 추론된 행동을 환경에 전달하여 다음 상태(obs), 보상(rewards), 종료 여부(dones)를 받습니다.
+            # Pass the inferred action to the environment to get the next state (obs), reward (rewards), and done status (dones).
             actions = torch.clamp(res_dict["actions"], -1.0, 1.0)
             self.obs, rewards, self.dones, infos = self.env.step(actions)
             rewards = rewards.unsqueeze(1)
 
-            # 받은 보상과 종료 여부를 ExperienceBuffer에 저장합니다.
+            # Save the received reward and done status to the ExperienceBuffer.
             self.storage.update_data("dones", n, self.dones)
             shaped_rewards = 0.01 * rewards.clone()
-            # Value Bootstrap: 에피소드가 타임아웃으로 끝났을 경우, 마지막 상태의 가치를 보상에 추가해줍니다.
+            # Value Bootstrap: If the episode ends due to a timeout, add the value of the last state to the reward.
             if self.value_bootstrap and "time_outs" in infos:
                 shaped_rewards += (
                     self.gamma
@@ -424,7 +424,7 @@ class PPO(object):
                 )
             self.storage.update_data("rewards", n, shaped_rewards)
 
-            # 에피소드 보상 및 길이 통계 업데이트
+            # Episode reward and length statistics update
             self.current_rewards += rewards
             self.current_lengths += 1
             done_indices = self.dones.nonzero(as_tuple=False)
@@ -447,14 +447,14 @@ class PPO(object):
             self.current_rewards = self.current_rewards * not_dones.unsqueeze(1)
             self.current_lengths = self.current_lengths * not_dones
 
-        # 마지막 스텝의 가치를 추론하여 GAE 계산에 사용합니다.
+        # Infer the value of the last step and use it for GAE calculation.
         res_dict = self.model_act(self.obs)
         last_values = res_dict["values"]
 
         self.agent_steps += self.batch_size
-        # 수집된 데이터를 바탕으로 GAE를 이용해 어드밴티지와 리턴을 계산합니다.
+        # Calculate advantage and return using GAE based on the collected data.
         self.storage.computer_return(last_values, self.gamma, self.tau)
-        # 학습을 위해 데이터를 준비합니다 (어드밴티지 정규화 등).
+        # Prepare data for training (advantage normalization, etc.).
         self.storage.prepare_training()
 
         returns = self.storage.data_dict["returns"]
@@ -480,8 +480,8 @@ def policy_kl(p0_mu, p0_sigma, p1_mu, p1_sigma):
 # from https://github.com/leggedrobotics/rsl_rl/blob/master/rsl_rl/algorithms/ppo.py
 class AdaptiveScheduler(object):
     """
-    적응형 학습률 스케줄러.
-    이전 정책과 현재 정책 사이의 KL Divergence를 기반으로 학습률을 동적으로 조절합니다.
+    Adaptive learning rate scheduler.
+    Dynamically adjusts the learning rate based on the KL Divergence between the old and new policies.
     """
     def __init__(self, kl_threshold=0.008):
         super().__init__()
@@ -491,10 +491,10 @@ class AdaptiveScheduler(object):
 
     def update(self, current_lr, kl_dist):
         lr = current_lr
-        # KL Divergence가 임계값의 2배보다 크면 (정책이 너무 많이 변하면), 학습률을 줄입니다.
+        # If KL Divergence is greater than twice the threshold (policy changed too much), decrease the learning rate.
         if kl_dist > (2.0 * self.kl_threshold):
             lr = max(current_lr / 1.5, self.min_lr)
-        # KL Divergence가 임계값의 0.5배보다 작으면 (정책이 너무 적게 변하면), 학습률을 높입니다.
+        # If KL Divergence is less than half the threshold (policy changed too little), increase the learning rate.
         if kl_dist < (0.5 * self.kl_threshold):
             lr = min(current_lr * 1.5, self.max_lr)
         return lr

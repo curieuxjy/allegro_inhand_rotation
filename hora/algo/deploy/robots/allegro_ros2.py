@@ -33,7 +33,7 @@ DEFAULT_ORDER = {
 
 ###################################################################################################
 # TBD #
-# 양손 코드는 한손 코드 기반으로 직접 작성 예정 25.10.31
+# Two-hand code will be written directly based on the one-hand code 25.10.31
 
 
 class AllegroHandIO(Node):
@@ -139,17 +139,17 @@ class AllegroHandIO(Node):
     def poll_joint_position(
         self, wait: bool = False, timeout: float = 3.0
     ) -> Optional[np.ndarray]:
-        """현재 조인트 위치를 Allegro 순서(16-D)로 반환합니다.
+        """Returns the current joint positions in Allegro order (16-D).
 
         Args:
-            wait (bool): 데이터를 기다릴지 여부 (True이면 timeout까지 spin)
-            timeout (float): 최대 대기 시간(초)
+            wait (bool): Whether to wait for data (spins until timeout if True)
+            timeout (float): Maximum wait time in seconds
 
         Returns:
-            np.ndarray | None: 16-D 조인트 벡터 또는 None
+            np.ndarray | None: 16-D joint vector or None
         """
 
-        # 1️⃣ JointState 수신 대기
+        # 1️⃣ Wait for JointState
         if self._last_js is None and wait:
             start_time = time.time()
             while self._last_js is None and (time.time() - start_time) < timeout:
@@ -159,11 +159,11 @@ class AllegroHandIO(Node):
         if js is None or not js.position:
             return None
 
-        # 2️⃣ 이름 기반 인덱스 매핑 초기화 (첫 수신 시 1회만)
+        # 2️⃣ Initialize name-based index mapping (only on first receipt)
         if self._index_map is None and js.name:
             self._index_map = self._build_index_map(js.name)
 
-        # 3️⃣ 인덱스 매핑 성공 시 그대로 정렬하여 반환
+        # 3️⃣ If index mapping is successful, sort and return
         if self._index_map:
             try:
                 vec = np.array([js.position[i] for i in self._index_map], dtype=float)
@@ -172,7 +172,7 @@ class AllegroHandIO(Node):
             except Exception:
                 self.get_logger().warn("poll_joint_position: index mapping failed, fallback to raw order.")
 
-        # 4️⃣ 매핑 실패 시 fallback — 앞 16개 사용
+        # 4️⃣ Fallback on mapping failure — use the first 16
         if len(js.position) >= 16:
             return np.array(js.position[:16], dtype=float)
 
@@ -180,14 +180,14 @@ class AllegroHandIO(Node):
 
 
     def _build_index_map(self, joint_names: List[str]) -> Optional[List[int]]:
-        """joint_states의 이름 리스트로부터 Allegro 16D 인덱스 매핑 생성."""
+        """Create Allegro 16D index mapping from the list of joint_states names."""
         name_to_index = {n.lower(): i for i, n in enumerate(joint_names)}
         index_map = []
 
         for desired in self._desired_names:
             idx = name_to_index.get(desired.lower())
             if idx is None:
-                # 하나라도 매칭 실패하면 전체 매핑 무효화
+                # If even one match fails, invalidate the entire mapping
                 self.get_logger().warn(f"Missing joint name in /joint_states: '{desired}'")
                 return None
             index_map.append(idx)
@@ -242,7 +242,7 @@ def stop_allegro_io(io: AllegroHandIO):
 
 ################ two hands io demo ####################
 
-# --- 추가: 여러 노드를 한 executor에서 돌리기 ---
+# --- Add: Run multiple nodes in one executor ---
 class _RunnerMany:
     def __init__(self, nodes):
         from rclpy.executors import SingleThreadedExecutor
@@ -269,13 +269,13 @@ def start_allegro_ios(sides=("right", "left")):
     nodes = [AllegroHandIO(side=s) for s in sides]
     runner = _RunnerMany(nodes)
     runner.start()
-    # 러너를 참조로 보존(정리 시 필요)
+    # Keep a reference to the runner (needed for cleanup)
     for n in nodes:
         n._runner_many = runner
     return {n.side: n for n in nodes}
 
 def stop_allegro_ios(nodes_dict):
-    # 동일 runner를 공유하므로 하나만 꺼주면 됨
+    # Since they share the same runner, just turn off one
     any_node = next(iter(nodes_dict.values()))
     if hasattr(any_node, "_runner_many"):
         any_node._runner_many.stop()
@@ -309,17 +309,17 @@ if __name__ == "__main__":
     # io_r = ios["right"]
     # io_l = ios["left"]
 
-    # # /joint_states 도착 대기
+    # # Wait for /joint_states to arrive
     # cur_r = io_r.poll_joint_position(wait=True, timeout=5.0)
     # cur_l = io_l.poll_joint_position(wait=True, timeout=5.0)
 
-    # # 에코 커맨드
+    # # Echo command
     # if cur_r is not None: io_r.command_joint_position(cur_r)
     # if cur_l is not None: io_l.command_joint_position(cur_l)
 
     # time.sleep(2.0)
 
-    # # 안전자세 후 종료
+    # # Go to safe pose and then exit
     # io_r.go_safe()
     # io_l.go_safe()
     # stop_allegro_ios(ios)

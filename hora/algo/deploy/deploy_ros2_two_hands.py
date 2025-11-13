@@ -19,7 +19,7 @@ from hora.utils.misc import tprint
 
 
 # =========================================================
-# 변환/재배열 유틸 (단일 손용)
+# Conversion/rearrangement utility (for single hand)
 # =========================================================
 
 def _action_hora2allegro(actions):
@@ -61,7 +61,7 @@ def _reorder_timr2imrt(timr):
 
 
 # =========================================================
-# 제어 에이전트 (Timer 기반, 양손)
+# Control agent (Timer-based, two hands)
 # =========================================================
 
 class HardwarePlayerTwoHands:
@@ -391,7 +391,7 @@ class HardwarePlayerTwoHands:
 
 
 # =========================================================
-# 실행 예시
+# Execution example
 # =========================================================
 if __name__ == "__main__":
     import argparse

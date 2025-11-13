@@ -27,10 +27,10 @@ class MLP(nn.Module):
 
 class ProprioAdaptTConv(nn.Module):
     """
-    고유수용성 감각 이력 인코더 (Proprioceptive History Encoder).
-    Stage 2에서 사용되며, 로봇의 과거 움직임 데이터(proprioceptive history)를 입력받아
-    1D 컨볼루션(Temporal Aggregation)을 통해 시간적 특징을 추출하고,
-    이를 통해 환경의 숨겨진 특성(extrinsic)을 추론하는 잠재 벡터를 생성합니다.
+    Proprioceptive History Encoder.
+    Used in Stage 2, it takes the robot's past movement data (proprioceptive history) as input,
+    extracts temporal features through 1D convolution (Temporal Aggregation),
+    and generates a latent vector that infers the hidden characteristics (extrinsic) of the environment.
     """
     def __init__(self):
         super(ProprioAdaptTConv, self).__init__()
@@ -71,23 +71,23 @@ class ActorCritic(nn.Module):
         self.priv_info = kwargs["priv_info"]
         self.priv_info_stage2 = kwargs["proprio_adapt"]
 
-        # --- 인코더 정의 부분 ---
+        # --- Encoder Definition Part ---
         if self.priv_info:
             mlp_input_shape += self.priv_mlp[-1]
-            # 1. 특권 정보 인코더 (Privileged Information Encoder)
-            #    - 역할: 환경의 실제 물리 정보(priv_info)를 잠재 벡터로 변환합니다.
-            #    - Stage 1에서는 정책 학습에 직접 사용되고, Stage 2에서는 '정답'을 제공하는 선생님 역할을 합니다.
+            # 1. Privileged Information Encoder
+            #    - Role: Converts the actual physical information of the environment (priv_info) into a latent vector.
+            #    - In Stage 1, it is used directly for policy learning, and in Stage 2, it acts as a teacher providing the 'ground truth'.
             self.env_mlp = MLP(units=self.priv_mlp, input_size=kwargs["priv_info_dim"])
 
             if self.priv_info_stage2:
-                # 2. 고유수용성 감각 이력 인코더 (Proprioceptive History Encoder)
-                #    - 역할: 로봇의 과거 움직임(proprio_hist)만으로 환경 정보를 '추론'하는 잠재 벡터를 생성합니다.
-                #    - Stage 2에서만 학습 및 사용됩니다.
+                # 2. Proprioceptive History Encoder
+                #    - Role: Generates a latent vector that 'infers' environment information solely from the robot's past movements (proprio_hist).
+                #    - Trained and used only in Stage 2.
                 self.adapt_tconv = ProprioAdaptTConv()
 
-        # 3. 정책 상태 인코더 (Policy State Encoder)
-        #    - 역할: 일반 관측 정보(obs)와 위에서 처리된 환경 잠재 벡터를 결합하여,
-        #            최종 행동과 가치를 결정하는 데 사용될 '상태(state)'를 생성합니다.
+        # 3. Policy State Encoder
+        #    - Role: Combines the general observation information (obs) with the environment latent vector processed above,
+        #            to generate the 'state' to be used for determining the final action and value.
         self.actor_mlp = MLP(units=self.units, input_size=mlp_input_shape) # actor network
         self.value = torch.nn.Linear(out_size, 1)                          # critic network
         self.mu = torch.nn.Linear(out_size, actions_num)
@@ -136,15 +136,15 @@ class ActorCritic(nn.Module):
         obs = obs_dict["obs"]
         extrin, extrin_gt = None, None
 
-        # --- 인코더 사용 및 정보 결합 부분 ---
+        # --- Encoder Usage and Information Combination Part ---
         if self.priv_info:
-            # Stage 2: 적응 단계 (고유수용성 감각 이력 인코더 사용)
+            # Stage 2: Adaptation phase (using proprioceptive history encoder)
             if self.priv_info_stage2:
-                # 2. 고유수용성 감각 이력 인코더가 환경 정보를 '추론' (extrin)
+                # 2. The proprioceptive history encoder 'infers' environment information (extrin)
                 extrin = self.adapt_tconv(obs_dict["proprio_hist"])
 
-                # 1. 특권 정보 인코더가 '정답' 환경 정보 생성 (extrin_gt)
-                #    (학습 시에만 priv_info가 제공됨)
+                # 1. The privileged information encoder generates 'ground truth' environment information (extrin_gt)
+                #    (priv_info is provided only during training)
                 extrin_gt = (
                     self.env_mlp(obs_dict["priv_info"])
                     if "priv_info" in obs_dict
@@ -153,21 +153,21 @@ class ActorCritic(nn.Module):
                 extrin_gt = torch.tanh(extrin_gt)
                 extrin = torch.tanh(extrin)
 
-                # 추론된 환경 정보(extrin)를 일반 관측(obs)과 결합
+                # Combine the inferred environment information (extrin) with the general observation (obs)
                 obs = torch.cat([obs, extrin], dim=-1)
-            # Stage 1: PPO 학습 단계 (특권 정보 인코더만 사용)
+            # Stage 1: PPO learning phase (using only the privileged information encoder)
             else:
-                # 1. 특권 정보 인코더가 환경 정보를 '직접' 생성 (extrin)
+                # 1. The privileged information encoder 'directly' generates environment information (extrin)
                 extrin = self.env_mlp(obs_dict["priv_info"])
                 extrin = torch.tanh(extrin)
 
-                # 생성된 환경 정보를 일반 관측(obs)과 결합
+                # Combine the generated environment information with the general observation (obs)
                 obs = torch.cat([obs, extrin], dim=-1)
 
-        # 3. 정책 상태 인코더가 결합된 정보를 최종 '상태' 벡터로 변환
+        # 3. The policy state encoder converts the combined information into a final 'state' vector
         x = self.actor_mlp(obs)
 
-        # 최종 상태 벡터를 사용하여 가치(value)와 행동(mu)을 출력
+        # Use the final state vector to output the value and action (mu)
         value = self.value(x)
         mu = self.mu(x)
         sigma = self.sigma

@@ -68,16 +68,16 @@ class ProprioAdapt(object):
         self.agent_steps = 0
         self.max_agent_steps = self.ppo_config["max_agent_steps"] # get rid of hardcoded 1e9
         # ---- Optim ----
-        # --- Stage 2의 핵심: 적응 모듈만 학습 ---
-        # Stage 1에서 학습된 모델의 대부분의 파라미터는 동결(학습되지 않도록 설정)합니다.
+        # --- The core of Stage 2: Train only the adaptation module ---
+        # Most of the parameters of the model learned in Stage 1 are frozen (set not to be trained).
         adapt_params = []
         for name, p in self.model.named_parameters():
-            # 이름에 'adapt_tconv'가 포함된, 즉 '적응 모듈'에 해당하는 파라미터만 학습 대상으로 선택합니다.
+            # Select only the parameters corresponding to the 'adaptation module', i.e., those whose names contain 'adapt_tconv', as the training target.
             if "adapt_tconv" in name:
                 adapt_params.append(p)
             else:
                 p.requires_grad = False
-        # 선택된 적응 모듈 파라미터만 최적화(Adam)하도록 설정합니다.
+        # Set to optimize (Adam) only the selected adaptation module parameters.
         self.optim = torch.optim.Adam(adapt_params, lr=3e-4)
         # ---- Training Misc
         self.internal_counter = 0
@@ -97,18 +97,18 @@ class ProprioAdapt(object):
         self.sa_mean_std.eval()
 
     def test(self):
-        # --- 배포(테스트) 단계 ---
-        # 이 단계에서는 더 이상 특권 정보(priv_info)를 사용하지 않습니다.
+        # --- Deployment (test) phase ---
+        # In this phase, privileged information (priv_info) is no longer used.
         self.set_eval()
         obs_dict = self.env.reset()
         while True:
-            # 모델에 현재 관측(obs)과 고유수용성 감각 이력(proprio_hist)만을 입력합니다.
+            # Input only the current observation (obs) and proprioceptive history (proprio_hist) to the model.
             input_dict = {
                 "obs": self.running_mean_std(obs_dict["obs"]),
                 "proprio_hist": self.sa_mean_std(obs_dict["proprio_hist"].detach()),
             }
-            # 학습된 적응 모듈이 proprio_hist를 바탕으로 환경 잠재 벡터를 *추론*하고,
-            # 정책(Actor)은 이 추론된 정보를 활용하여 최종 행동(mu)을 결정합니다.
+            # The trained adaptation module *infers* the environment latent vector based on proprio_hist,
+            # and the policy (Actor) uses this inferred information to determine the final action (mu).
             mu = self.model.act_inference(input_dict)
             mu = torch.clamp(mu, -1.0, 1.0)
             obs_dict, r, done, info = self.env.step(mu)
@@ -120,28 +120,28 @@ class ProprioAdapt(object):
         obs_dict = self.env.reset()
         self.agent_steps += self.batch_size
         while self.agent_steps <= self.max_agent_steps: # 1e9
-            # --- 적응 모듈 학습 ---
-            # 모델에 현재 관측, 특권 정보, 고유수용성 감각 이력을 모두 입력합니다.
+            # --- Adaptation module training ---
+            # Input the current observation, privileged information, and proprioceptive history to the model.
             input_dict = {
                 "obs": self.running_mean_std(obs_dict["obs"]).detach(),
                 "priv_info": obs_dict["priv_info"],
                 "proprio_hist": self.sa_mean_std(obs_dict["proprio_hist"].detach()),
             }
-            # 모델은 행동(mu)과 함께 두 개의 잠재 벡터를 출력합니다:
-            # e: '적응 모듈'이 고유수용성 감각 이력(proprio_hist)을 기반으로 *예측*한 환경 잠재 벡터
-            # e_gt: 'Privilege Encoder'가 실제 특권 정보(priv_info)를 기반으로 *생성*한 정답 환경 잠재 벡터
+            # The model outputs the action (mu) and two latent vectors:
+            # e: The environment latent vector *predicted* by the 'adaptation module' based on the proprioceptive history (proprio_hist)
+            # e_gt: The ground truth environment latent vector *generated* by the 'Privilege Encoder' based on the actual privileged information (priv_info)
             mu, _, _, e, e_gt = self.model._actor_critic(input_dict)
 
-            # 손실 계산: 예측된 잠재 벡터(e)가 정답 잠재 벡터(e_gt)를 모방하도록 평균 제곱 오차(MSE) 손실을 계산합니다.
-            # e_gt.detach()를 사용하여 이 부분으로는 그래디언트가 흐르지 않도록 합니다. 즉, 오직 'e'를 생성하는 적응 모듈만 학습됩니다.
+            # Loss calculation: Calculate the mean squared error (MSE) loss so that the predicted latent vector (e) imitates the ground truth latent vector (e_gt).
+            # Use e_gt.detach() to prevent gradients from flowing into this part. That is, only the adaptation module that generates 'e' is trained.
             loss = ((e - e_gt.detach()) ** 2).mean()
 
-            # 계산된 손실을 바탕으로 적응 모듈의 파라미터를 업데이트합니다.
+            # Update the parameters of the adaptation module based on the calculated loss.
             self.optim.zero_grad()
             loss.backward()
             self.optim.step()
 
-            # 환경과 상호작용하기 위해 계산된 행동(mu)을 사용합니다.
+            # Use the calculated action (mu) to interact with the environment.
             mu = mu.detach()
             mu = torch.clamp(mu, -1.0, 1.0)
             obs_dict, r, done, info = self.env.step(mu)

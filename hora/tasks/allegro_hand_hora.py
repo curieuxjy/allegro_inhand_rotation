@@ -134,36 +134,36 @@ class AllegroHandHora(VecTask):
 
         self.debug_hist_len = 500
         self._dbg_step = 0
-        self._action_saved = False ######## action 저장 플래그
+        self._action_saved = False ######## action save flag
         self._dbg_fig = None
         self._dbg_axes = None     # list of 4 axes
         self._dbg_lines = None    # dict: {dof_i: (l_act, l_prev, l_tgt, l_cur)}
 
-        # Allegro DOF 수 유추 (예: 16 또는 32)
+        # Infer Allegro DOF count (e.g., 16 or 32)
         dof = int(self.allegro_hand_dof_lower_limits.shape[-1])
 
-        # 히스토리 버퍼: (hist_len, dof)
+        # History buffer: (hist_len, dof)
         self._hist_actions     = np.zeros((self.debug_hist_len, dof), dtype=np.float32)
         self._hist_prev_target = np.zeros((self.debug_hist_len, dof), dtype=np.float32)
         self._hist_target_raw  = np.zeros((self.debug_hist_len, dof), dtype=np.float32)
         self._hist_cur_target  = np.zeros((self.debug_hist_len, dof), dtype=np.float32)
 
-        # 옵션: cur vs tgt 비교 민감도 (절대 오차)
-        self.debug_atol = 1e-6         # 완전 동일(클램프 없음)이면 cur 숨김
-        self.debug_compare_latest = False  # True면 최근 샘플(마지막 포인트)만 비교, False면 전체 히스토리 비교
+        # Option: cur vs tgt comparison sensitivity (absolute error)
+        self.debug_atol = 1e-6         # If exactly the same (no clamp), hide cur
+        self.debug_compare_latest = False  # True to compare only the latest sample (last point), False to compare the entire history
 
 
-        # 시각화 대상 dof 인덱스(고정: 0,1,2,3)
+        # Visualization target dof indices (fixed: 0,1,2,3)
         self._plot_dofs = list(range(16)) # [3, 7, 11, 15] #  [0, 4, 8, 12]
 
-        # Allegro DOF 수 유추 이후, debug_* 설정들 아래에 추가/수정
+        # After inferring Allegro DOF count, add/modify debug_* settings below
         self.err_hist_len_mult = 6
         self._err_hist_len = self.debug_hist_len * self.err_hist_len_mult
 
-        # 에러 버퍼만 6배 길이로
+        # Error buffer is 6 times longer
         self._hist_pos_error = np.zeros((self._err_hist_len, self.allegro_hand_dof_lower_limits.shape[-1]), dtype=np.float32)
 
-        # 전용 에러 플롯 핸들
+        # Dedicated error plot handles
         self._err_fig = None
         self._err_axes = None
         self._err_lines = None  # {dof_i: line}
@@ -613,7 +613,7 @@ class AllegroHandHora(VecTask):
             .unsqueeze(1)
         )
 
-        # 16:32: real target // 현재 pos로 cur_target을 설정
+        # 16:32: real target // set cur_target with current pos
         self.obs_buf_lag_history[at_reset_env_ids, :, 16:32] = (
             self.allegro_hand_dof_pos[at_reset_env_ids].unsqueeze(1)
             )
@@ -621,9 +621,9 @@ class AllegroHandHora(VecTask):
         # ============== UPDATE OBS_BUF / PRORIO_HIST_BUF ==============
         # 3 steps history
         t_buf = (self.obs_buf_lag_history[:, -3:].reshape(self.num_envs, -1)).clone()
-        # self.obs_buf를 self.obs_buf_lag_history의 마지막 3 스텝으로 채움 // obs_buf는 96차원(32 x 3)
+        # Fill self.obs_buf with the last 3 steps of self.obs_buf_lag_history // obs_buf is 96-dimensional (32 x 3)
         self.obs_buf[:, : t_buf.shape[1]] = t_buf
-        # self.proprio_hist_buf를 self.obs_buf_lag_history의 마지막 30 스텝으로 채움 // proprio_hist_buf torch.Size([1, 30, 32])
+        # Fill self.proprio_hist_buf with the last 30 steps of self.obs_buf_lag_history // proprio_hist_buf torch.Size([1, 30, 32])
         self.proprio_hist_buf[:] = self.obs_buf_lag_history[:, -self.prop_hist_len :].clone() ############################## 2
 
 
@@ -714,7 +714,7 @@ class AllegroHandHora(VecTask):
                 objectx = ((self.object_pos[i]+ quat_apply(self.object_rot[i],to_torch([1, 0, 0], device=self.device) * 0.2,)).cpu().numpy())
                 objecty = ((self.object_pos[i]+ quat_apply(self.object_rot[i],to_torch([0, 1, 0], device=self.device) * 0.2,)).cpu().numpy())
                 objectz = ((self.object_pos[i]+ quat_apply(self.object_rot[i],to_torch([0, 0, 1], device=self.device) * 0.2,)).cpu().numpy())
-                # current_main_vector를 사용하여 객체의 주 축 방향 위치 계산 ??
+                # Calculate the position of the object's principal axis direction using current_main_vector ??
                 objectm = (self.object_pos[i] + self.rot_axis_buf[i]).cpu().numpy()
 
                 p0 = self.object_pos[i].cpu().numpy()
@@ -740,7 +740,7 @@ class AllegroHandHora(VecTask):
                     [0.1, 0.1, 0.85],
                 )
 
-                # 객체의 주 회전 방향 선 그리기 (보라색 계열)
+                # Draw the main rotation direction line of the object (purple series)
                 self.gym.add_lines(
                     self.viewer,
                     self.envs[i],
@@ -755,18 +755,18 @@ class AllegroHandHora(VecTask):
         self.gym.add_ground(self.sim, plane_params)
 
 
-    # ===== (2) 공용 헬퍼 =====
+    # ===== (2) Common helpers =====
     def _to_np(self, x):
         return x.detach().to("cpu").float().numpy()
 
     def _pick_env0_1d(self, arr_np):
-        """arr_np: (num_envs, dof) 또는 (dof,) -> 항상 (dof,) 반환 (env0 선택)"""
+        """arr_np: (num_envs, dof) or (dof,) -> always returns (dof,) (selects env0)"""
         if arr_np.ndim == 1:
             return arr_np
         return arr_np[0]
 
     def _push_row(self, hist: np.ndarray, row: np.ndarray):
-        """슬라이딩 윈도우 push: hist:(T,D), row:(D,)"""
+        """Sliding window push: hist:(T,D), row:(D,)"""
         if row.ndim > 1:
             row = row.reshape(-1)
         D = hist.shape[1]
@@ -804,17 +804,17 @@ class AllegroHandHora(VecTask):
 
         self.prev_targets[:] = self.cur_targets.clone()
 
-        # 4) 디버깅 히스토리 push + 플로팅
+        # 4) Push debugging history + plotting
         if self.debug_plots and debug_prev_targets is not None:
-            # 최초 한 번 세팅
+            # Set up once for the first time
             self._ensure_plots()
 
             act_np = self._to_np(self.actions)
-            prv_np = self._to_np(debug_prev_targets)    # NOTE: cur로 갱신되기 전에 copy
+            prv_np = self._to_np(debug_prev_targets)    # NOTE: copy before being updated by cur
             tgt_np = self._to_np(targets)
             cur_np = self._to_np(self.cur_targets)
 
-            # 항상 env0만 사용
+            # Always use env0
             act_row = self._pick_env0_1d(act_np)
             prv_row = self._pick_env0_1d(prv_np)
             tgt_row = self._pick_env0_1d(tgt_np)
@@ -877,7 +877,7 @@ class AllegroHandHora(VecTask):
 
 
     def _ensure_err_plot(self):
-        """env0의 pos_error(rad)를 4x4로 그리는 전용 플롯."""
+        """Dedicated plot to draw pos_error(rad) of env0 in 4x4."""
         if not self.debug_plots:
             return
         if self._err_fig is not None and self._err_axes is not None and self._err_lines is not None:
@@ -890,7 +890,7 @@ class AllegroHandHora(VecTask):
         import numpy as np
 
         plt.ion()
-        # (변경) 에러 플롯은 6배 길이
+        # (Change) Error plot is 6 times longer
         x = np.arange(self._err_hist_len)
 
         self._err_fig = plt.figure(figsize=(16, 12))
@@ -902,8 +902,8 @@ class AllegroHandHora(VecTask):
             self._err_axes.append(ax)
             ax.set_title(f"pos_error (rad) - DOF {dof_i}", fontsize=9)
             if idx >= 12:
-                ax.set_xlabel(f"steps (×{self.err_hist_len_mult})")  # 표기만
-            # (기존) ax.set_xlim(0, self.debug_hist_len - 1)
+                ax.set_xlabel(f"steps (×{self.err_hist_len_mult})")  # Notation only
+            # (Original) ax.set_xlim(0, self.debug_hist_len - 1)
             ax.set_xlim(0, self._err_hist_len - 1)
             ax.grid(True, alpha=0.3)
 
@@ -922,7 +922,7 @@ class AllegroHandHora(VecTask):
         import matplotlib.pyplot as plt
 
         for ax, dof_i in zip(self._err_axes, self._plot_dofs):
-            y = self._hist_pos_error[:, dof_i]   # 이미 6배 길이 버퍼
+            y = self._hist_pos_error[:, dof_i]   # Already 6x length buffer
             self._err_lines[dof_i].set_ydata(y)
 
             if np.isfinite(y).any():
@@ -953,7 +953,7 @@ class AllegroHandHora(VecTask):
 
             pos_error = self.cur_targets - dof_pos
             # TODO plot pos_error
-            # >>> 전용 에러 플롯: env0 기준으로 슬라이딩 기록 + 갱신
+            # >>> Dedicated error plot: sliding record + update based on env0
             if self.debug_plots:
                 self._ensure_err_plot()
                 perr_np  = self._to_np(pos_error)           # (num_envs, dof)
