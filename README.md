@@ -1,5 +1,5 @@
 # allegro_inhand_rotation
-Implementation Example of In-Hand Object Rotation using the Allegro Hand Platforms
+Reference Implementation of In-Hand Object Rotation for Allegro Hand Platforms
 
 This repository provides an implementation example for in-hand object rotation using the **Allegro Hand Platforms**.  
 It combines a ROS2-based hardware controller with an AI-driven manipulation algorithm originally developed for in-hand rotation research.
