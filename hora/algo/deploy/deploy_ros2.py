@@ -9,7 +9,7 @@ import numpy as np
 import torch
 
 # one hand (right)
-from hora.algo.deploy.robots.allegro_ros2_one import start_allegro_io, stop_allegro_io
+from hora.algo.deploy.robots.allegro_ros2 import start_allegro_io, stop_allegro_io
 # TBD: two hands
 # from hora.algo.deploy.robots.allegro_ros2 import start_allegro_io, stop_allegro_io
 
