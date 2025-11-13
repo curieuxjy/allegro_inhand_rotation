@@ -175,48 +175,81 @@ if dof_info0['num_dofs'] != dof_info1['num_dofs']:
     sys.exit(1)
 
 # -----------------------------------------------------------------------------
-# Create one environment and add exactly 2 actors—each using a different asset.
-# Place them 2 meters apart (here one at (-1,0,0.5) and the other at (1,0,0.5)).
+# Create two environments:
+# - Environment 1: Both hands at the same position (overlapping)
+# - Environment 2: Hands at different positions for easier comparison
 # -----------------------------------------------------------------------------
-spacing   = 1
+spacing   = 0.5
 env_lower = gymapi.Vec3(-spacing, 0.0, -spacing)
 env_upper = gymapi.Vec3(spacing, spacing, spacing)
 envs = []
 actor_handles = []
 
-print("Creating 1 environment with 2 actors (2 meters apart)")
-env = gym.create_env(sim, env_lower, env_upper, 1)
-envs.append(env)
+print("Creating 2 environments with 2 actors each")
 
-# Create the first actor (agent1) using asset0.
-pose1 = gymapi.Transform()
-pose1.p = gymapi.Vec3(0.0, 0.0, 0.5)
-actor_handle1 = gym.create_actor(env, asset0, pose1, "agent1", 0, 1)
-actor_handles.append(actor_handle1)
+# Environment 1: Both hands at the same position (overlapping)
+env0 = gym.create_env(sim, env_lower, env_upper, 2)
+envs.append(env0)
+
+# Create the first actor (agent1) using asset0 at same position.
+pose1_env0 = gymapi.Transform()
+pose1_env0.p = gymapi.Vec3(0.0, 0.0, 0.3)
+actor_handle1_env0 = gym.create_actor(env0, asset0, pose1_env0, "agent1_env0", 0, 1)
+actor_handles.append(actor_handle1_env0)
 
 # Set color for agent1 (blue)
-num_bodies1 = gym.get_actor_rigid_body_count(env, actor_handle1)
+num_bodies1 = gym.get_actor_rigid_body_count(env0, actor_handle1_env0)
 for i in range(num_bodies1):
-    gym.set_rigid_body_color(env, actor_handle1, i, gymapi.MESH_VISUAL, gymapi.Vec3(0.3, 0.5, 1.0))
+    gym.set_rigid_body_color(env0, actor_handle1_env0, i, gymapi.MESH_VISUAL, gymapi.Vec3(0.3, 0.5, 1.0))
 
-# Create the second actor (agent2) using asset1.
-pose2 = gymapi.Transform()
-pose2.p = gymapi.Vec3(0.0, 0.0, 0.5)
-actor_handle2 = gym.create_actor(env, asset1, pose2, "agent2", 0, 1)
-actor_handles.append(actor_handle2)
+# Create the second actor (agent2) using asset1 at same position.
+pose2_env0 = gymapi.Transform()
+pose2_env0.p = gymapi.Vec3(0.0, 0.0, 0.3)
+actor_handle2_env0 = gym.create_actor(env0, asset1, pose2_env0, "agent2_env0", 0, 1)
+actor_handles.append(actor_handle2_env0)
 
 # Set color for agent2 (orange)
-num_bodies2 = gym.get_actor_rigid_body_count(env, actor_handle2)
+num_bodies2 = gym.get_actor_rigid_body_count(env0, actor_handle2_env0)
 for i in range(num_bodies2):
-    gym.set_rigid_body_color(env, actor_handle2, i, gymapi.MESH_VISUAL, gymapi.Vec3(1.0, 0.5, 0.2))
+    gym.set_rigid_body_color(env0, actor_handle2_env0, i, gymapi.MESH_VISUAL, gymapi.Vec3(1.0, 0.5, 0.2))
 
-# Set default DOF states for both actors.
-gym.set_actor_dof_states(env, actor_handle1, dof_info0['dof_states'], gymapi.STATE_ALL)
-gym.set_actor_dof_states(env, actor_handle2, dof_info1['dof_states'], gymapi.STATE_ALL)
+# Set default DOF states for both actors in env0.
+gym.set_actor_dof_states(env0, actor_handle1_env0, dof_info0['dof_states'], gymapi.STATE_ALL)
+gym.set_actor_dof_states(env0, actor_handle2_env0, dof_info1['dof_states'], gymapi.STATE_ALL)
+
+# Environment 2: Hands at different positions (side by side)
+env1 = gym.create_env(sim, env_lower, env_upper, 2)
+envs.append(env1)
+
+# Create the first actor (agent1) using asset0 at right position.
+pose1_env1 = gymapi.Transform()
+pose1_env1.p = gymapi.Vec3(0.3, 0.0, 0.3)
+actor_handle1_env1 = gym.create_actor(env1, asset0, pose1_env1, "agent1_env1", 0, 1)
+actor_handles.append(actor_handle1_env1)
+
+# Set color for agent1 (blue)
+num_bodies1 = gym.get_actor_rigid_body_count(env1, actor_handle1_env1)
+for i in range(num_bodies1):
+    gym.set_rigid_body_color(env1, actor_handle1_env1, i, gymapi.MESH_VISUAL, gymapi.Vec3(0.3, 0.5, 1.0))
+
+# Create the second actor (agent2) using asset1 at left position.
+pose2_env1 = gymapi.Transform()
+pose2_env1.p = gymapi.Vec3(-0.3, 0.0, 0.3)
+actor_handle2_env1 = gym.create_actor(env1, asset1, pose2_env1, "agent2_env1", 0, 1)
+actor_handles.append(actor_handle2_env1)
+
+# Set color for agent2 (orange)
+num_bodies2 = gym.get_actor_rigid_body_count(env1, actor_handle2_env1)
+for i in range(num_bodies2):
+    gym.set_rigid_body_color(env1, actor_handle2_env1, i, gymapi.MESH_VISUAL, gymapi.Vec3(1.0, 0.5, 0.2))
+
+# Set default DOF states for both actors in env1.
+gym.set_actor_dof_states(env1, actor_handle1_env1, dof_info0['dof_states'], gymapi.STATE_ALL)
+gym.set_actor_dof_states(env1, actor_handle2_env1, dof_info1['dof_states'], gymapi.STATE_ALL)
 
 # Position the camera.
-cam_pos    = gymapi.Vec3(0.5, -0.5, 0.8)
-cam_target = gymapi.Vec3(0, 0, 0.5)
+cam_pos    = gymapi.Vec3(1.8, -0.5, 0.5)
+cam_target = gymapi.Vec3(0.5, 0, 0.2)
 gym.viewer_camera_look_at(viewer, None, cam_pos, cam_target)
 
 # -----------------------------------------------------------------------------
@@ -294,24 +327,38 @@ while not gym.query_viewer_has_closed(viewer):
     if args.show_axis:
         gym.clear_lines(viewer)
 
-    # Update the DOF states for both actors.
-    gym.set_actor_dof_states(env, actor_handle1, dof_info0['dof_states'], gymapi.STATE_POS)
-    gym.set_actor_dof_states(env, actor_handle2, dof_info1['dof_states'], gymapi.STATE_POS)
+    # Update the DOF states for all actors in both environments.
+    gym.set_actor_dof_states(env0, actor_handle1_env0, dof_info0['dof_states'], gymapi.STATE_POS)
+    gym.set_actor_dof_states(env0, actor_handle2_env0, dof_info1['dof_states'], gymapi.STATE_POS)
+    gym.set_actor_dof_states(env1, actor_handle1_env1, dof_info0['dof_states'], gymapi.STATE_POS)
+    gym.set_actor_dof_states(env1, actor_handle2_env1, dof_info1['dof_states'], gymapi.STATE_POS)
 
     if args.show_axis:
-        # Draw DOF axes for agent1.
-        dof_handle0 = gym.get_actor_dof_handle(env, actor_handle1, current_dof0)
-        frame0 = gym.get_dof_frame(env, dof_handle0)
+        # Draw DOF axes for env0 agent1.
+        dof_handle0 = gym.get_actor_dof_handle(env0, actor_handle1_env0, current_dof0)
+        frame0 = gym.get_dof_frame(env0, dof_handle0)
         p1 = frame0.origin
         p2 = frame0.origin + frame0.axis * 0.7
         color = gymapi.Vec3(1.0, 0.0, 0.0)
-        gymutil.draw_line(p1, p2, color, gym, viewer, env)
-        # Draw DOF axes for agent2.
-        dof_handle1 = gym.get_actor_dof_handle(env, actor_handle2, current_dof1)
-        frame1 = gym.get_dof_frame(env, dof_handle1)
+        gymutil.draw_line(p1, p2, color, gym, viewer, env0)
+        # Draw DOF axes for env0 agent2.
+        dof_handle1 = gym.get_actor_dof_handle(env0, actor_handle2_env0, current_dof1)
+        frame1 = gym.get_dof_frame(env0, dof_handle1)
         p1 = frame1.origin
         p2 = frame1.origin + frame1.axis * 0.7
-        gymutil.draw_line(p1, p2, color, gym, viewer, env)
+        gymutil.draw_line(p1, p2, color, gym, viewer, env0)
+        # Draw DOF axes for env1 agent1.
+        dof_handle0 = gym.get_actor_dof_handle(env1, actor_handle1_env1, current_dof0)
+        frame0 = gym.get_dof_frame(env1, dof_handle0)
+        p1 = frame0.origin
+        p2 = frame0.origin + frame0.axis * 0.7
+        gymutil.draw_line(p1, p2, color, gym, viewer, env1)
+        # Draw DOF axes for env1 agent2.
+        dof_handle1 = gym.get_actor_dof_handle(env1, actor_handle2_env1, current_dof1)
+        frame1 = gym.get_dof_frame(env1, dof_handle1)
+        p1 = frame1.origin
+        p2 = frame1.origin + frame1.axis * 0.7
+        gymutil.draw_line(p1, p2, color, gym, viewer, env1)
 
     gym.step_graphics(sim)
     gym.draw_viewer(viewer, sim, True)

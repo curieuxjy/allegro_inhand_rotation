@@ -73,7 +73,12 @@ conda create -n hora python=3.8
 conda create -n allegro python=3.10
 ```
 
-###
+### Check each conda environments
+
+- `hora` env check: `python compare_hands.py`
+  - This will show you the difference between AllegroHandHora urdf and PublicAllegroHandHora urdf
+- `allegro` env check: `python hora/algo/allegro_ros2.py`
+  - Command Interface script
 
 
 ## Run
