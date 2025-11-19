@@ -25,7 +25,7 @@ env:
   clipObservations: 5.0
   clipActions: 1.0
   reset_height_threshold: 0.645
-  grasp_cache_name: 'internal_allegro'
+  grasp_cache_name: 'allegro_hora'
 
   # Random forces applied to the object
   forceScale: 0.0
@@ -83,7 +83,7 @@ env:
     sampleProb: [0.35, 0.2, 0.45]
 
   asset:
-    handAsset: 'assets/allegro/allegro_internal.urdf'
+    handAsset: 'assets/allegro/allegro_hora.urdf'
 
   # set to True if you use camera sensors in the environment
   enableCameraSensors: False

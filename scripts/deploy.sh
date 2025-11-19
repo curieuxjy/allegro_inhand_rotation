@@ -1,3 +1,3 @@
 #!/bin/bash
 CACHE=$1
-python run.py checkpoint=outputs/AllegroHandHora/${CACHE}/stage2_nn/best.pth
+python run.py checkpoint=outputs/RightAllegroHandHora/${CACHE}/stage2_nn/best.pth

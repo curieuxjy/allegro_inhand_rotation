@@ -54,29 +54,29 @@ def main(config: DictConfig):
     # -------------------------------------------------------------------------------
     date = str(datetime.datetime.now().strftime("%m%d%H%M"))
 
-    if WANDB:
+    # Initialize wandb if enabled
+    if config.wandb.enabled:
         config_dict = OmegaConf.to_container(config, resolve=True)
         wandb_config = {}
         for _ in range(2):
             wandb_config.update(dict(config_dict["task"]))
             wandb_config.update(dict(config_dict["train"]))
 
-        project_name = "hora"
         wandb.init(
-            project=project_name,
-            entity="curieuxjy",
+            project=config.wandb.project,
+            entity=config.wandb.entity,
             config={**wandb_config},
             sync_tensorboard=True,
         )
         del config_dict
         del wandb_config
-        # wandb.tensorboard.patch(save=True, tensorboard_x=True)
 
         # set run name
         wandb.run.name = (
             ("stage1" if config.train.algo == "PPO" else "stage2") + "_" + config.task_name + "_" + date
         )
         wandb.run.save()
+        cprint(f"Wandb initialized: {config.wandb.entity}/{config.wandb.project}", "cyan", attrs=["bold"])
 
     # -------------------------------------------------------------------------------
 
@@ -122,11 +122,11 @@ def main(config: DictConfig):
         agent.restore_train(config.train.load_path)
         agent.train()
 
+    # Clean up wandb
+    if config.wandb.enabled:
+        wandb.finish()
+        cprint("Wandb session finished", "cyan", attrs=["bold"])
+
 
 if __name__ == "__main__":
-    WANDB = False
-
     main()
-
-    if WANDB:
-        wandb.finish()

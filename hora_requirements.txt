@@ -1,0 +1,7 @@
+hydra-core>=1.1
+termcolor
+omegaconf
+gym
+tensorboard
+tensorboardx
+numpy==1.23.1

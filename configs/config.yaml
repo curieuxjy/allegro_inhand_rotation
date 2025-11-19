@@ -32,6 +32,12 @@ checkpoint: ''
 # disables rendering
 headless: False
 
+# Weights & Biases logging
+wandb:
+  enabled: False
+  entity: 'your-wandb-entity'
+  project: 'hora'
+
 # set default task and default training config based on task
 defaults:
   - _self_
