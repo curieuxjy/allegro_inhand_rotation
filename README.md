@@ -85,9 +85,9 @@ conda activate hora
 python compare_hands.py  # Shows URDF differences
 ```
 
-<center>
-<img src="./matarials/compare.gif" width="50%" />
-</center>
+<p align="center">
+  <img src="./materials/compare.gif" width="60%" />
+</p>
 
 **`allegro` environment check:**
 ```bash
@@ -117,13 +117,13 @@ This script loads both the right and left hand models in a single environment, a
 **Visualization:**
 
 <p align="center">
-  <img src="./matarials/allegro_right_left.gif" width="60%" alt="Allegro Right and Left Hands Comparison"/>
+  <img src="./materials/allegro_right_left.gif" width="60%" alt="Allegro Right and Left Hands Comparison"/>
 </p>
 
 **Fingertip Geometry Comparison:**
 
 <p align="center">
-  <img src="./matarials/hand_tips.png" width="60%" alt="Hand Fingertip Comparison"/>
+  <img src="./materials/hand_tips.png" width="60%" alt="Hand Fingertip Comparison"/>
 </p>
 
 The images above show the differences between the original HORA fingertips and the standard Allegro Hand V4 fingertips used in this repository.
@@ -180,7 +180,7 @@ python train.py task=RightAllegroHandHora train.ppo.learning_rate=1e-4
 To achieve a stable initial grasp, you must prepare reliable grasp poses for the target objects.
 According to the [original HORA instructions](https://github.com/HaozhiQi/hora/?tab=readme-ov-file#prerequisite), you can directly download the provided `.npy` grasp pose files for:
 
-* **Public Allegro Hand**
+* **Allegro Hand V4**
 * **HORA internal Allegro Hand** (features slightly longer fingertips than the standard Allegro Hand V4)
 
 We strongly recommend reviewing the original instructions to understand the differences and verify the available data files.
@@ -193,6 +193,12 @@ scripts/gen_grasp.sh 0 # GPU ID
 
 This script will run the full grasp-pose generation pipeline and produce the necessary `.npy` files for training or evaluation.
 
+If you have multiple gpus, you can parallelize the process by running multiple instances with different GPU IDs:
+
+```bash
+scripts/gen_grasp_multigpus.sh 0 1 2
+```
+
 
 ### Train
 
@@ -203,7 +209,7 @@ The training pipeline follows a two-stage approach using **Rapid Motor Adaptatio
 - **Stage 2**: Student policy using only proprioceptive observations (joint positions, velocities, history)
 
 <p align="center">
-  <img src="./matarials/training_stages.png" width="80%" alt="Training Process"/>
+  <img src="./materials/training_stages.png" width="80%" alt="Training Process"/>
 </p>
 
 > **Note**: The following instructions use **RightAllegroHandHora** as the default task. To train the left hand, modify the `task` parameter in the training scripts to `task=LeftAllegroHandHora`.
@@ -264,6 +270,9 @@ Renders 64 environments with GUI to visually inspect policy behavior. Most rando
 ./scripts/vis_s2.sh my_experiment  # RUN_NAME
 ```
 
+<p align="center">
+  <img src="./materials/vis.gif" width="60%"/>
+</p>
 
 ### Test in Real-world
 
