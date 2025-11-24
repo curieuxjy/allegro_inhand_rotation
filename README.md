@@ -30,13 +30,6 @@ This codebase utilizes:
 
 Download: [https://developer.nvidia.com/isaac-gym/download](https://developer.nvidia.com/isaac-gym/download)
 
-**Prerequisites:**
-```
-• Ubuntu 18.04 or 20.04
-• Python 3.6, 3.7, or 3.8
-• NVIDIA driver version 470.74 or newer
-• GPU: NVIDIA Pascal or later, with at least 8 GB VRAM
-```
 
 ### 2. Allegro Hand ROS2 Controller
 
@@ -46,53 +39,104 @@ This project operates based on the official controller:
 
 Refer to the official repository for detailed installation and setup instructions. You will need this for real-world deployment.
 
-**Prerequisites:**
-```
-• ROS 2 Humble
-• Python 3.10 or later
-```
-
 ### 3. Python Environment Setup
 
-⚠️ **Important Notice**
+> [!IMPORTANT]
+> **Two separate Python environments are required** due to incompatible version requirements:
+> - **Training (Isaac Gym):** Requires Python 3.6–3.8
+> - **Deployment (ROS 2 Humble):** Requires Python 3.10+
 
-Isaac Gym and ROS 2 Humble have **incompatible Python version requirements**:
+We use two Conda environments to handle this incompatibility:
 
-* **Training Phase (Isaac Gym):** Python 3.6–3.8
-* **Deployment Phase (ROS 2 Humble):** Python 3.10+
-
-**We strongly recommend using separate Conda virtual environments:**
+#### Environment 1: `hora` (For Training in Isaac Gym)
 
 ```bash
-# For algorithm training (Isaac Gym)
+# Create environment with Python 3.8
 conda create -n hora python=3.8
-conda activate hora
-pip install -r hora_requirements.txt
 
-# For algorithm deployment (ROS 2)
+# Activate environment
+conda activate hora
+
+# Install Isaac Gym (after downloading and extracting)
+cd /path/to/isaacgym/python
+pip install -e .
+
+# Install training dependencies
+pip install -r hora_requirements.txt
+```
+
+**Use this environment for:**
+- Training policies in simulation
+- Running `train.py`, `eval_s1.sh`, `eval_s2.sh`, etc.
+- Generating grasp poses
+
+#### Environment 2: `allegro` (For Real-world Deployment)
+
+```bash
+# Create environment with Python 3.10
 conda create -n allegro python=3.10
+
+# Activate environment
 conda activate allegro
+
+# Install deployment dependencies
 pip install -r allegro_requirements.txt
 ```
 
-This separation prevents dependency collisions and ensures stable operation across the full pipeline.
+**Use this environment for:**
+- Deploying trained policies to physical Allegro Hand hardware
+- Running ROS 2 nodes and controllers
+- Running `deploy_one_hand.sh`, `deploy_two_hands.sh`, etc.
 
 ### 4. Verify Installation
 
-**`hora` environment check:**
+After setting up both environments, verify they work correctly:
+
+#### Check 1: `hora` Environment (Training)
+
+Verify Isaac Gym and dependencies are installed correctly:
+
 ```bash
 conda activate hora
-python compare_hands.py  # Shows URDF differences
+python compare_hands.py
 ```
+
+**Expected output:** Isaac Gym GUI will display both hand versions side-by-side, showing the fingertip geometry differences between Allegro Hand V4 and the modified version used in the original HORA implementation.
 
 <p align="center">
   <img src="./materials/compare.gif" width="60%" />
 </p>
 
-**`allegro` environment check:**
+> **Troubleshooting:** If you encounter this error:
+> ```
+> ImportError: libpython3.8.so.1.0: cannot open shared object file: No such file or directory
+> ```
+> Set the library path and try again:
+> ```bash
+> export LD_LIBRARY_PATH=/path/to/conda/envs/hora/lib:$LD_LIBRARY_PATH
+> python compare_hands.py
+> ```
+
+#### Check 2: `allegro` Environment (Deployment)
+
+> **Note:** This check requires physical Allegro Hand hardware and ROS 2 setup. Skip if you only want to train in simulation.
+
+**Step 1:** Launch the ROS 2 hand controller (in a separate terminal):
+
+```bash
+# Navigate to your allegro_hand_ros2 workspace
+cd /path/to/allegro_hand_ros2_ws
+source install/setup.bash
+
+# Launch controller
+ros2 launch allegro_hand_bringup allegro_hand.launch.py
+```
+
+**Step 2:** Test the deployment interface:
+
 ```bash
 conda activate allegro
-python hora/algo/allegro_ros2.py  # Command interface script
+python hora/algo/deploy/robots/allegro_ros2.py
 ```
 
 
@@ -352,7 +396,6 @@ Start the ROS 2 controller node that manages hand hardware communication.
 ros2 launch allegro_hand_bringup allegro_hand.launch.py
 ```
 
-Expected output: Joint state topics published at `/allegroHand_0/joint_states`
 
 **Dual Hand:**
 
@@ -360,7 +403,6 @@ Expected output: Joint state topics published at `/allegroHand_0/joint_states`
 ros2 launch allegro_hand_bringup allegro_hand_duo.launch.py
 ```
 
-Expected output: Joint state topics for both hands (`/allegroHand_0/joint_states`, `/allegroHand_1/joint_states`)
 
 > [!IMPORTANT]
 > Controller command topics differ based on setup:
@@ -371,7 +413,15 @@ Expected output: Joint state topics for both hands (`/allegroHand_0/joint_states
 
 #### Step 3: Deploy HORA Algorithm
 
+> [!IMPORTANT]
+> Make sure you have activated the `allegro` conda environment before running deployment scripts:
+> ```bash
+> conda activate allegro
+> ```
+
 Run the trained policy on the physical hardware. The deployment script loads Stage 2 (student) checkpoints and executes the policy in real-time.
+
+
 
 **Single Hand:**
 
