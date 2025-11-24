@@ -178,12 +178,7 @@ python train.py task=RightAllegroHandHora train.ppo.learning_rate=1e-4
 ### Generate Grasping Poses
 
 To achieve a stable initial grasp, you must prepare reliable grasp poses for the target objects.
-According to the [original HORA instructions](https://github.com/HaozhiQi/hora/?tab=readme-ov-file#prerequisite), you can directly download the provided `.npy` grasp pose files for:
-
-* **Allegro Hand V4**
-* **HORA internal Allegro Hand** (features slightly longer fingertips than the standard Allegro Hand V4)
-
-We strongly recommend reviewing the original instructions to understand the differences and verify the available data files.
+According to the [original HORA instructions](https://github.com/HaozhiQi/hora/?tab=readme-ov-file#prerequisite), you can directly download the provided `.npy` grasp pose files for Allegro Hand V4 Right/Left: [Download Link]()
 
 Alternatively, you can generate grasp poses **from scratch** using the scripts included in this repository:
 

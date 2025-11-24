@@ -158,7 +158,7 @@ class AllegroHandIO(Node):
             np.ndarray | None: 16-D joint vector or None
         """
 
-        # 1️⃣ Wait for JointState
+        # Wait for JointState
         if self._last_js is None and wait:
             start_time = time.time()
             while self._last_js is None and (time.time() - start_time) < timeout:
@@ -168,12 +168,12 @@ class AllegroHandIO(Node):
         if js is None or not js.position:
             return None
 
-        # 2️⃣ Initialize name-based index mapping (only on first receipt)
+        # Initialize name-based index mapping (only on first receipt)
         if self._index_map is None and not self._index_map_attempted and js.name:
             self._index_map = self._build_index_map(js.name)
             self._index_map_attempted = True  # Mark that we tried (success or fail)
 
-        # 3️⃣ If index mapping is successful, sort and return
+        # If index mapping is successful, sort and return
         if self._index_map:
             try:
                 vec = np.array([js.position[i] for i in self._index_map], dtype=float)
@@ -182,7 +182,7 @@ class AllegroHandIO(Node):
             except Exception:
                 self.get_logger().warn("poll_joint_position: index mapping failed, fallback to raw order.")
 
-        # 4️⃣ Fallback on mapping failure — use the first 16
+        # Fallback on mapping failure — use the first 16
         if len(js.position) >= 16:
             return np.array(js.position[:16], dtype=float)
 

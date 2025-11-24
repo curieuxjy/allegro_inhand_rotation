@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+# Copyright (c) 2025 Wonik Robotics
+#
+# This software is licensed under the MIT License.
+# See the LICENSE file in the project root for full license text.
+
 # import os
 import time
 import signal
@@ -10,9 +14,6 @@ import torch
 
 # one hand (right)
 from hora.algo.deploy.robots.allegro_ros2 import start_allegro_io, stop_allegro_io
-# TBD: two hands
-# from hora.algo.deploy.robots.allegro_ros2 import start_allegro_io, stop_allegro_io
-
 
 from hora.algo.models.models import ActorCritic
 from hora.algo.models.running_mean_std import RunningMeanStd

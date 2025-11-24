@@ -2,12 +2,10 @@ import hydra
 
 from omegaconf import DictConfig, OmegaConf
 from hora.utils.misc import set_np_formatting, set_seed
-# noinspection PyUnresolvedReferences
 from hora.algo.deploy.deploy_ros2_two_hands import HardwarePlayerTwoHands
 
 
-# ---- OmegaConf & Hydra Config
-# Resolvers used in hydra configs (see https://omegaconf.readthedocs.io/en/2.1_branch/usage.html#resolvers)
+# OmegaConf & Hydra Config
 OmegaConf.register_new_resolver('eq', lambda x, y: x.lower() == y.lower())
 OmegaConf.register_new_resolver('contains', lambda x, y: x.lower() in y.lower())
 OmegaConf.register_new_resolver('if', lambda pred, a, b: a if pred else b)
