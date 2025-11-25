@@ -144,8 +144,8 @@
       <geometry>
         <mesh filename="meshes/allegro/link_3.0_tip.obj"/>
       </geometry>
-      <material name="white">
-        <color rgba=".9 .9 .9 1"/>
+      <material name="sky_blue">
+        <color rgba="0.529 0.808 0.922 1"/>
       </material>
     </visual>
     <collision>
@@ -282,8 +282,8 @@
       <geometry>
         <mesh filename="meshes/allegro/link_3.0_tip.obj"/>
       </geometry>
-      <material name="white">
-        <color rgba=".9 .9 .9 1"/>
+      <material name="sky_blue">
+        <color rgba="0.529 0.808 0.922 1"/>
       </material>
     </visual>
     <collision>
@@ -421,8 +421,8 @@
       <geometry>
         <mesh filename="meshes/allegro/link_3.0_tip.obj"/>
       </geometry>
-      <material name="white">
-        <color rgba=".9 .9 .9 1"/>
+      <material name="sky_blue">
+        <color rgba="0.529 0.808 0.922 1"/>
       </material>
     </visual>
     <collision>
@@ -576,8 +576,8 @@
       <geometry>
         <mesh filename="meshes/allegro/link_15.0_tip.obj"/>
       </geometry>
-      <material name="white">
-        <color rgba=".9 .9 .9 1"/>
+      <material name="sky_blue">
+        <color rgba="0.529 0.808 0.922 1"/>
       </material>
     </visual>
     <collision>

@@ -1,6 +1,6 @@
 #!/bin/bash
 CACHE=$1
-python train.py task=RightAllegroHandHoraTip headless=False pipeline=gpu \
+python train.py task=LeftAllegroHandHoraTip headless=False pipeline=gpu \
 task.env.numEnvs=64 test=True \
 task.env.randomization.randomizeMass=False \
 task.env.randomization.randomizeCOM=False \
@@ -9,6 +9,6 @@ task.env.randomization.randomizePDGains=False \
 task.env.randomization.randomizeScale=True \
 train.algo=ProprioAdapt \
 train.ppo.priv_info=True train.ppo.proprio_adapt=True \
-train.ppo.output_name=RightAllegroHandHoraTip/"${CACHE}" \
-checkpoint=outputs/RightAllegroHandHoraTip/"${CACHE}"/stage2_nn/best.pth \
+train.ppo.output_name=LeftAllegroHandHoraTip/"${CACHE}" \
+checkpoint=outputs/LeftAllegroHandHoraTip/"${CACHE}"/stage2_nn/best.pth \
 wandb.enabled=False \
