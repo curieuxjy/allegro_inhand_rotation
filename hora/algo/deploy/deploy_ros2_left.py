@@ -24,30 +24,69 @@ from hora.utils.misc import tprint
 # Conversion/rearrangement utility
 # =========================================================
 
-def _action_hora2allegro(actions):
+def _action_hora2allegro_left(actions):
+    """Convert hora ordering to allegro ordering for LEFT hand
+    Left hand hora order: ring, thumb, middle, index
+    Allegro order: index, middle, ring, thumb
+    """
     if isinstance(actions, torch.Tensor):
         if actions.dim() > 1:
             actions = actions.view(-1)
         cmd_act = actions.clone()
-        temp = actions[[4, 5, 6, 7]].clone()
+        # allegro[0-3] = hora[12-15] (index)
+        cmd_act[[0, 1, 2, 3]] = actions[[12, 13, 14, 15]]
+        # allegro[4-7] = hora[8-11] (middle)
         cmd_act[[4, 5, 6, 7]] = actions[[8, 9, 10, 11]]
-        cmd_act[[12, 13, 14, 15]] = temp
-        cmd_act[[8, 9, 10, 11]] = actions[[12, 13, 14, 15]]
+        # allegro[8-11] = hora[0-3] (ring)
+        cmd_act[[8, 9, 10, 11]] = actions[[0, 1, 2, 3]]
+        # allegro[12-15] = hora[4-7] (thumb)
+        cmd_act[[12, 13, 14, 15]] = actions[[4, 5, 6, 7]]
         return cmd_act
     else:
         a = np.asarray(actions).flatten()
         cmd = a.copy()
-        temp = a[[4, 5, 6, 7]].copy()
+        # allegro[0-3] = hora[12-15] (index)
+        cmd[[0, 1, 2, 3]] = a[[12, 13, 14, 15]]
+        # allegro[4-7] = hora[8-11] (middle)
         cmd[[4, 5, 6, 7]] = a[[8, 9, 10, 11]]
-        cmd[[12, 13, 14, 15]] = temp
-        cmd[[8, 9, 10, 11]] = a[[12, 13, 14, 15]]
+        # allegro[8-11] = hora[0-3] (ring)
+        cmd[[8, 9, 10, 11]] = a[[0, 1, 2, 3]]
+        # allegro[12-15] = hora[4-7] (thumb)
+        cmd[[12, 13, 14, 15]] = a[[4, 5, 6, 7]]
         return cmd
+    
+# def _action_hora2allegro(actions):
+#     if isinstance(actions, torch.Tensor):
+#         if actions.dim() > 1:
+#             actions = actions.view(-1)
+#         cmd_act = actions.clone()
+#         temp = actions[[4, 5, 6, 7]].clone()
+#         cmd_act[[4, 5, 6, 7]] = actions[[8, 9, 10, 11]]
+#         cmd_act[[12, 13, 14, 15]] = temp
+#         cmd_act[[8, 9, 10, 11]] = actions[[12, 13, 14, 15]]
+#         return cmd_act
+#     else:
+#         a = np.asarray(actions).flatten()
+#         cmd = a.copy()
+#         temp = a[[4, 5, 6, 7]].copy()
+#         cmd[[4, 5, 6, 7]] = a[[8, 9, 10, 11]]
+#         cmd[[12, 13, 14, 15]] = temp
+#         cmd[[8, 9, 10, 11]] = a[[12, 13, 14, 15]]
+#         return cmd
+
+def _obs_allegro2hora_left(o):
+    """Convert allegro ordering to hora ordering for LEFT hand
+    Allegro: index - middle - ring - thumb
+    Left hand hora: ring, thumb, middle, index
+    """
+    return np.concatenate([o[8:12], o[12:16], o[4:8], o[0:4]]).astype(np.float64)
 
 
-def _obs_allegro2hora(o):
-    # allegro: index - middle - ring - thumb
-    # hora   : index, thumb, middle, ring
-    return np.concatenate([o[0:4], o[12:16], o[4:8], o[8:12]]).astype(np.float64)
+# def _obs_allegro2hora(o):
+#     # allegro: index - middle - ring - thumb
+#     # hora   : index, thumb, middle, ring
+#     return np.concatenate([o[0:4], o[12:16], o[4:8], o[8:12]]).astype(np.float64)
+
 
 
 def _reorder_imrt2timr(imrt):
@@ -64,7 +103,7 @@ def _reorder_timr2imrt(timr):
 # Control agent (Timer-based)
 # =========================================================
 
-class HardwarePlayer:
+class LeftHardwarePlayer:
     def __init__(self, hz: float = 20.0, device: str = "cuda"):
         torch.set_grad_enabled(False)
         self.hz = float(hz)
@@ -176,7 +215,7 @@ class HardwarePlayer:
 
         # 4) publish command (convert when sending to CPU only)
         cmd = self.cur_target.detach().to("cpu").numpy()[0]
-        ros1 = _action_hora2allegro(cmd)
+        ros1 = _action_hora2allegro_left(cmd)
         ros2 = _reorder_imrt2timr(ros1)
         self.allegro.command_joint_position(ros2)
 
@@ -184,7 +223,7 @@ class HardwarePlayer:
         q_pos = self.allegro.poll_joint_position(wait=False, timeout=0.0)
         if q_pos is not None:
             ros1_q = _reorder_timr2imrt(q_pos)
-            hora_q = _obs_allegro2hora(ros1_q)
+            hora_q = _obs_allegro2hora_left(ros1_q)
             obs_q = torch.from_numpy(hora_q.astype(np.float32)).to(self.device)
             self._last_obs_q = obs_q
         else:
@@ -209,10 +248,10 @@ class HardwarePlayer:
     def deploy(self):
 
         run_start_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-        print(f"🧠 Starting HardwarePlayer deployment at {run_start_time}...")
+        print(f"🧠 Starting LeftHardwarePlayer deployment at {run_start_time}...")
 
         # Start ROS2 I/O (background executor)
-        self.allegro = start_allegro_io(side='right')
+        self.allegro = start_allegro_io(side='left')
 
         # Warm-up (blocking) — settle hardware
         warmup = int(self.hz * 8)
@@ -230,7 +269,7 @@ class HardwarePlayer:
             return
 
         ros1_q = _reorder_timr2imrt(q_pos)
-        hora_q = _obs_allegro2hora(ros1_q)
+        hora_q = _obs_allegro2hora_left(ros1_q)
         obs_q = torch.from_numpy(hora_q.astype(np.float32)).to(self.device)
         self._last_obs_q = obs_q
 
@@ -300,7 +339,7 @@ class HardwarePlayer:
 # =========================================================
 if __name__ == "__main__":
     # Example: If CUDA is not available, change device to "cpu"
-    agent = HardwarePlayer(hz=20.0, device="cuda" if torch.cuda.is_available() else "cpu")
+    agent = LeftHardwarePlayer(hz=20.0, device="cuda" if torch.cuda.is_available() else "cpu")
     # Load checkpoint if necessary
     # agent.restore("/path/to/checkpoint.pth")
     agent.deploy()

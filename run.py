@@ -8,7 +8,8 @@ import hydra
 
 from omegaconf import DictConfig, OmegaConf
 from hora.utils.misc import set_np_formatting, set_seed
-from hora.algo.deploy.deploy_ros2 import HardwarePlayer
+from hora.algo.deploy.deploy_ros2_right import RightHardwarePlayer
+from hora.algo.deploy.deploy_ros2_left import LeftHardwarePlayer
 from hora.algo.deploy.deploy_ros2_two_hands import HardwarePlayerTwoHands
 
 
@@ -31,6 +32,8 @@ def main(config: DictConfig):
     checkpoint_left = config.get('checkpoint_left', None)
     checkpoint_single = config.get('checkpoint', None)
 
+    breakpoint()
+
     # Two-hand mode: if checkpoint_right or checkpoint_left is specified
     if checkpoint_right is not None or checkpoint_left is not None:
         # Two-hand mode
@@ -51,7 +54,14 @@ def main(config: DictConfig):
         if checkpoint_single is None:
             raise ValueError("checkpoint must be specified for single-hand mode")
 
-        agent = HardwarePlayer()
+        # Detect hand side from checkpoint path
+        #   - outputs/LeftTipAllegroHandHora/... → LeftHardwarePlayer
+        #   - outputs/RightAllegroHandHora/... → RightHardwarePlayer
+
+        if 'Left' in checkpoint_single:
+            agent = LeftHardwarePlayer()
+        else:
+            agent = RightHardwarePlayer()
         agent.restore(checkpoint_single)
         agent.deploy()
 
