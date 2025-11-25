@@ -342,7 +342,7 @@ class HardwarePlayerTwoHands:
         self.allegro_ios = start_allegro_ios(sides=("right", "left"))
 
         # Warmup - settle hardware for both hands
-        warmup = int(self.hz * 4)
+        warmup = int(self.hz * 8)
         for t in range(warmup):
             tprint(f"setup {t} / {warmup}")
             pose = _reorder_imrt2timr(np.array(self.init_pose, dtype=np.float64))

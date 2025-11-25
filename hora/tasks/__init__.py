@@ -12,4 +12,8 @@ isaacgym_task_map = {
     "RightAllegroHandGrasp": AllegroHandGrasp,
     "LeftAllegroHandHora": AllegroHandHora,       # allgero v4 left hand
     "LeftAllegroHandGrasp": AllegroHandGrasp,
+    "RightAllegroHandHoraTip": AllegroHandHora,      # tip
+    "RightAllegroHandGraspTip": AllegroHandGrasp,
+    "LeftAllegroHandHoraTip": AllegroHandHora,       # tip
+    "LeftAllegroHandGraspTip": AllegroHandGrasp,
 }

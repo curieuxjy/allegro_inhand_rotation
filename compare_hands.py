@@ -21,8 +21,8 @@ class AssetDesc:
         self.flip_visual_attachments = flip_visual_attachments
 
 asset_descriptors = [
-    AssetDesc("allegro/allegro_right.urdf", False),
-    AssetDesc("allegro/allegro_hora.urdf", False),
+    AssetDesc("allegro/allegro_hora_right.urdf", False),
+    AssetDesc("allegro/allegro_hora_left.urdf", False),
 ]
 
 # -----------------------------------------------------------------------------

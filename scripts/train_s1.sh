@@ -12,6 +12,7 @@ echo extra "${EXTRA_ARGS}"
 
 CUDA_VISIBLE_DEVICES=${GPUS} \
 python train.py task=RightAllegroHandHora headless=True seed=${SEED} \
+task.env.numEnvs=4 train.ppo.minibatch_size=32 \
 task.env.forceScale=2 task.env.randomForceProbScalar=0.25 \
 train.algo=PPO \
 train.ppo.priv_info=True train.ppo.proprio_adapt=False \

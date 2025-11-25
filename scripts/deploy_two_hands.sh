@@ -1,6 +1,6 @@
 #!/bin/bash
 # Deploy two hands with hand-specific checkpoints
-# Right hand loads from RightAllegroHandHora
+# Right hand loads from RightAllegroHandHoraTip
 # Left hand loads from LeftAllegroHandHora
 #
 # Usage:
@@ -18,26 +18,26 @@ if [ -z "$CACHE_RIGHT" ]; then
     echo "  $0 exp_right exp_left               # Different cache names"
     echo ""
     echo "Checkpoint paths:"
-    echo "  Right: outputs/RightAllegroHandHora/<cache_right>/stage2_nn/best.pth"
-    echo "  Left:  outputs/LeftAllegroHandHora/<cache_left>/stage2_nn/best.pth"
+    echo "  Right: outputs/AllegroHandHora/<cache_right>/stage2_nn/best.pth"
+    echo "  Left:  outputs/AllegroHandHora/<cache_left>/stage2_nn/best.pth"
     exit 1
 fi
 
 # Build checkpoint paths from hand-specific directories
-CHECKPOINT_RIGHT="outputs/RightAllegroHandHora/${CACHE_RIGHT}/stage2_nn/best.pth"
+CHECKPOINT_RIGHT="outputs/AllegroHandHora/${CACHE_RIGHT}/stage2_nn/best.pth"
 
 if [ -z "$CACHE_LEFT" ]; then
     # Use same cache name but from different hand directories
     CACHE_LEFT="${CACHE_RIGHT}"
-    CHECKPOINT_LEFT="outputs/LeftAllegroHandHora/${CACHE_LEFT}/stage2_nn/best.pth"
+    CHECKPOINT_LEFT="outputs/AllegroHandHora/${CACHE_LEFT}/stage2_nn/best.pth"
     echo "🧠 Using cache name '${CACHE_RIGHT}' for both hands"
-    echo "   Right: RightAllegroHandHora/${CACHE_RIGHT}"
-    echo "   Left:  LeftAllegroHandHora/${CACHE_LEFT}"
+    echo "   Right: AllegroHandHora/${CACHE_RIGHT}"
+    echo "   Left:  AllegroHandHora/${CACHE_LEFT}"
 else
     # Use different cache names
-    CHECKPOINT_LEFT="outputs/LeftAllegroHandHora/${CACHE_LEFT}/stage2_nn/best.pth"
-    echo "🧠 Right hand: RightAllegroHandHora/${CACHE_RIGHT}"
-    echo "🧠 Left hand:  LeftAllegroHandHora/${CACHE_LEFT}"
+    CHECKPOINT_LEFT="outputs/AllegroHandHora/${CACHE_LEFT}/stage2_nn/best.pth"
+    echo "🧠 Right hand: AllegroHandHora/${CACHE_RIGHT}"
+    echo "🧠 Left hand:  AllegroHandHora/${CACHE_LEFT}"
 fi
 
 echo ""

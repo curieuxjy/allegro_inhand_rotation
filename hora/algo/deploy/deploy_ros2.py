@@ -215,7 +215,7 @@ class HardwarePlayer:
         self.allegro = start_allegro_io(side='right')
 
         # Warm-up (blocking) — settle hardware
-        warmup = int(self.hz * 4)
+        warmup = int(self.hz * 8)
         for t in range(warmup):
             tprint(f"setup {t} / {warmup}")
             pose = _reorder_imrt2timr(np.array(self.init_pose, dtype=np.float64))

@@ -34,8 +34,8 @@ headless: False
 
 # Weights & Biases logging
 wandb:
-  enabled: False
-  entity: 'your-wandb-entity'
+  enabled: True
+  entity: 'curieuxjy'
   project: 'hora'
 
 # set default task and default training config based on task

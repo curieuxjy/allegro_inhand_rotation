@@ -20,11 +20,11 @@ if [ -z "$CACHE" ]; then
     echo "  $0 my_experiment"
     echo ""
     echo "Checkpoint path:"
-    echo "  outputs/RightAllegroHandHora/<cache_name>/stage2_nn/best.pth"
+    echo "  outputs/AllegroHandHora/<cache_name>/stage2_nn/best.pth"
     exit 1
 fi
 
-CHECKPOINT="outputs/RightAllegroHandHora/${CACHE}/stage2_nn/best.pth"
+CHECKPOINT="outputs/AllegroHandHora/${CACHE}/stage2_nn/best.pth"
 
 echo "🧠 Single hand deployment"
 echo "   Cache: ${CACHE}"
