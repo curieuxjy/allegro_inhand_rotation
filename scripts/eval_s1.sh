@@ -1,9 +1,25 @@
 #!/bin/bash
-GPUS=$1
-CACHE=$2
-C=outputs/RightAllegroHandHora/"${CACHE}"/stage1_nn/best.pth
+# Stage 1 Evaluation Script
+# Evaluates PPO with privileged information
+
+echo "=== Stage 1 Evaluation ==="
+
+read -p "GPUS [0]: " GPUS
+read -p "TASK [RightCorlAllegroHandHora]: " TASK
+read -p "CACHE [test]: " CACHE
+read -p "EXTRA_ARGS (optional): " EXTRA_ARGS
+
+GPUS=${GPUS:-0}
+TASK=${TASK:-RightCorlAllegroHandHora}
+CACHE=${CACHE:-test}
+
+echo ""
+echo "GPUS: ${GPUS}, TASK: ${TASK}, CACHE: ${CACHE}"
+echo "EXTRA_ARGS: ${EXTRA_ARGS}"
+
+C=outputs/${TASK}/"${CACHE}"/stage1_nn/best.pth
 CUDA_VISIBLE_DEVICES=${GPUS} \
-python train.py task=RightAllegroHandHora headless=True \
+python train.py task=${TASK} headless=True \
 task.env.numEnvs=10240 test=True task.on_evaluation=True \
 task.env.object.type=cylinder_default \
 train.algo=PPO \
@@ -16,6 +32,7 @@ task.env.randomization.jointNoiseScale=0.005 \
 task.env.reset_height_threshold=0.6 \
 task.env.forceScale=2 task.env.randomForceProbScalar=0.25 \
 train.ppo.priv_info=True \
-train.ppo.output_name=RightAllegroHandHora/"${CACHE}" \
+train.ppo.output_name=${TASK}/"${CACHE}" \
 checkpoint="${C}" \
-wandb.enabled=False
+wandb.enabled=False \
+${EXTRA_ARGS}
