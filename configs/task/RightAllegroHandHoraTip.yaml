@@ -1,7 +1,0 @@
-name: RightAllegroHandHoraTip
-defaults:
-  - RightAllegroHandHora
-env:
-  grasp_cache_name: 'allegro_right_tip'
-  asset:
-     handAsset: 'assets/allegro/allegro_right_tip.urdf'

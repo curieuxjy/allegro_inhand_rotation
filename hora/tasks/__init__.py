@@ -6,14 +6,18 @@ from hora.tasks.allegro_hand_grasp import AllegroHandGrasp
 # Multiple task names can point to the same class when the implementation is identical
 # but differs only in configuration (e.g., left vs. right hand or other config parameters).
 isaacgym_task_map = {
-    "AllegroHandHora": AllegroHandHora,           # hora original
-    "AllegroHandGrasp": AllegroHandGrasp,
-    "RightAllegroHandHora": AllegroHandHora,      # allgero v4 right hand
+    # Right hand
+    "RightCorlAllegroHandHora": AllegroHandHora,
+    "RightCorlAllegroHandGrasp": AllegroHandGrasp,
+    "RightAllegroHandHora": AllegroHandHora,
     "RightAllegroHandGrasp": AllegroHandGrasp,
-    "LeftAllegroHandHora": AllegroHandHora,       # allgero v4 left hand
+    "RightTipAllegroHandHora": AllegroHandHora,
+    "RightTipAllegroHandGrasp": AllegroHandGrasp,
+    # Left hand
+    "LeftCorlAllegroHandHora": AllegroHandHora,
+    "LeftCorlAllegroHandGrasp": AllegroHandGrasp,
+    "LeftAllegroHandHora": AllegroHandHora,
     "LeftAllegroHandGrasp": AllegroHandGrasp,
-    "RightAllegroHandHoraTip": AllegroHandHora,      # tip
-    "RightAllegroHandGraspTip": AllegroHandGrasp,
-    "LeftAllegroHandHoraTip": AllegroHandHora,       # tip
-    "LeftAllegroHandGraspTip": AllegroHandGrasp,
+    "LeftTipAllegroHandHora": AllegroHandHora,
+    "LeftTipAllegroHandGrasp": AllegroHandGrasp,
 }

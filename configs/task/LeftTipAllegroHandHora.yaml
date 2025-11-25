@@ -1,0 +1,10 @@
+name: LeftTipAllegroHandHora
+defaults:
+  - RightCorlAllegroHandHora
+env:
+  reset_height_threshold: 0.635
+  grasp_cache_name: 'allegro_tip_left'
+  reward:
+    rotateRewardScale: 1.25
+  asset:
+     handAsset: 'assets/allegro/allegro_tip_left.urdf'

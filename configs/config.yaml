@@ -41,7 +41,7 @@ wandb:
 # set default task and default training config based on task
 defaults:
   - _self_
-  - task: AllegroHandHora
+  - task: RightCorlAllegroHandHora
   - train: ${task}
   - override hydra/job_logging: disabled
 

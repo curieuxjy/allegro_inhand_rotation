@@ -1,0 +1,7 @@
+name: LeftCorlAllegroHandHora
+defaults:
+  - RightCorlAllegroHandHora
+env:
+  grasp_cache_name: 'allegro_corl_left'
+  asset:
+     handAsset: 'assets/allegro/allegro_corl_left.urdf'

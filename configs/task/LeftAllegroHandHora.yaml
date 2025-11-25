@@ -1,6 +1,6 @@
 name: LeftAllegroHandHora
 defaults:
-  - AllegroHandHora
+  - RightCorlAllegroHandHora
 env:
   reset_height_threshold: 0.625
   grasp_cache_name: 'allegro_left'
