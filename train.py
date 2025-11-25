@@ -75,7 +75,6 @@ def main(config: DictConfig):
         wandb.run.name = (
             ("stage1" if config.train.algo == "PPO" else "stage2") + "_" + config.task_name + "_" + date
         )
-        wandb.run.save()
         cprint(f"Wandb initialized: {config.wandb.entity}/{config.wandb.project}", "cyan", attrs=["bold"])
 
 

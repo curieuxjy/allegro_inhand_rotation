@@ -11,6 +11,9 @@
         <mesh filename="meshes/allegro/base_link_left.obj"/>
       </geometry>
       <origin rpy="-1.570795 0 0" xyz="0 0 0 "/>
+      <material name="black">
+        <color rgba="0.2 0.2 0.2 1"/>
+      </material>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="-0.009300 0 -0.0475"/>
@@ -25,6 +28,7 @@
       <geometry>
         <mesh filename="meshes/allegro/link_0.0.obj"/>
       </geometry>
+      <material name="black"/>
     </visual>
     <collision>
       <geometry>
@@ -55,6 +59,7 @@
       <geometry>
         <mesh filename="meshes/allegro/link_1.0.obj"/>
       </geometry>
+      <material name="black"/>
     </visual>
     <collision>
       <geometry>
@@ -80,6 +85,7 @@
       <geometry>
         <mesh filename="meshes/allegro/link_2.0.obj"/>
       </geometry>
+      <material name="black"/>
     </visual>
     <collision>
       <geometry>
@@ -100,6 +106,7 @@
       <geometry>
         <mesh filename="meshes/allegro/link_3.0.obj"/>
       </geometry>
+      <material name="black"/>
     </visual>
     <collision>
       <geometry>
@@ -157,6 +164,7 @@
       <geometry>
         <mesh filename="meshes/allegro/link_0.0.obj"/>
       </geometry>
+      <material name="black"/>
     </visual>
     <collision>
       <geometry>
@@ -182,6 +190,7 @@
       <geometry>
         <mesh filename="meshes/allegro/link_1.0.obj"/>
       </geometry>
+      <material name="black"/>
     </visual>
     <collision>
       <geometry>
@@ -207,6 +216,7 @@
       <geometry>
         <mesh filename="meshes/allegro/link_2.0.obj"/>
       </geometry>
+      <material name="black"/>
     </visual>
     <collision>
       <geometry>
@@ -287,6 +297,7 @@
       <geometry>
         <mesh filename="meshes/allegro/link_0.0.obj"/>
       </geometry>
+      <material name="black"/>
     </visual>
     <collision>
       <geometry>
@@ -312,6 +323,7 @@
       <geometry>
         <mesh filename="meshes/allegro/link_1.0.obj"/>
       </geometry>
+      <material name="black"/>
     </visual>
     <collision>
       <geometry>
@@ -337,6 +349,7 @@
       <geometry>
         <mesh filename="meshes/allegro/link_2.0.obj"/>
       </geometry>
+      <material name="black"/>
     </visual>
     <collision>
       <geometry>
@@ -418,6 +431,9 @@
         <mesh filename="meshes/allegro/link_12.0_left.obj"/>
       </geometry>
       <origin rpy="3.14159 0 0" xyz="0 0 0"/>
+      <material name="black">
+        <color rgba=".2 .2 .2 1"/>
+      </material>
     </visual>
     <collision>
       <geometry>
@@ -443,6 +459,9 @@
       <geometry>
         <mesh filename="meshes/allegro/link_13.0.obj"/>
       </geometry>
+      <material name="black">
+        <color rgba=".2 .2 .2 1"/>
+      </material>
     </visual>
     <collision>
       <geometry>
@@ -468,6 +487,7 @@
       <geometry>
         <mesh filename="meshes/allegro/link_14.0.obj"/>
       </geometry>
+      <material name="black"/>
     </visual>
     <collision>
       <geometry>
