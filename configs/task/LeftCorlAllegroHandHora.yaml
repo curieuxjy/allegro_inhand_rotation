@@ -3,5 +3,7 @@ defaults:
   - RightCorlAllegroHandHora
 env:
   grasp_cache_name: 'allegro_corl_left'
+  reward:
+    rotationAxis: [0, 0, 1]
   asset:
      handAsset: 'assets/allegro/allegro_corl_left.urdf'

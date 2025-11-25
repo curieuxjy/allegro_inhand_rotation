@@ -6,5 +6,6 @@ env:
   grasp_cache_name: 'allegro_tip_left'
   reward:
     rotateRewardScale: 1.25
+    rotationAxis: [0, 0, 1]
   asset:
      handAsset: 'assets/allegro/allegro_tip_left.urdf'

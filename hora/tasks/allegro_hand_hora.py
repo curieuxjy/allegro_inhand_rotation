@@ -642,7 +642,9 @@ class AllegroHandHora(VecTask):
         )
 
     def compute_reward(self, actions):
-        self.rot_axis_buf[:, -1] = -1
+        self.rot_axis_buf[:, 0] = self.rotation_axis[0]
+        self.rot_axis_buf[:, 1] = self.rotation_axis[1]
+        self.rot_axis_buf[:, 2] = self.rotation_axis[2]
         # pose diff penalty
         pose_diff_penalty = ((self.allegro_hand_dof_pos - self.init_pose_buf) ** 2).sum(-1)
         # work and torque penalty
@@ -1108,6 +1110,7 @@ class AllegroHandHora(VecTask):
         self.pose_diff_penalty_scale = r_config["poseDiffPenaltyScale"]
         self.torque_penalty_scale = r_config["torquePenaltyScale"]
         self.work_penalty_scale = r_config["workPenaltyScale"]
+        self.rotation_axis = r_config.get("rotationAxis", [0, 0, -1])  # default: z-axis negative
 
     def _create_object_asset(self):
         # object file to asset

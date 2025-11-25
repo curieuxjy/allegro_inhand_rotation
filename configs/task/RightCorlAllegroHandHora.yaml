@@ -47,6 +47,7 @@ env:
     poseDiffPenaltyScale: -0.3
     torquePenaltyScale: -0.1
     workPenaltyScale: -2.0
+    rotationAxis: [0, 0, -1]  # [x, y, z] rotation axis direction
 
   baseObjScale: 0.8
   randomization:

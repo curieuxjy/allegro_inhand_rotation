@@ -7,6 +7,7 @@ env:
 
   reward:
     rotateRewardScale: 1.25
+    rotationAxis: [0, 0, 1]
 
   asset:
      handAsset: 'assets/allegro/allegro_left.urdf'
