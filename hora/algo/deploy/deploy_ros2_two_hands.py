@@ -72,10 +72,12 @@ def main():
         "--use-side-prefix",  # Use ahl_* joint names
     ]
 
-    print(f"🚀 Launching right hand process...")
-    print(f"   Command: {' '.join(cmd_right)}")
-    proc_right = subprocess.Popen(
-        cmd_right,
+    # Launch left hand first, then right hand
+    # (to test if launch order affects behavior)
+    print(f"🚀 Launching left hand process...")
+    print(f"   Command: {' '.join(cmd_left)}")
+    proc_left = subprocess.Popen(
+        cmd_left,
         stdout=sys.stdout,
         stderr=sys.stderr,
         # Each process gets its own process group for clean signal handling
@@ -85,10 +87,10 @@ def main():
     # Small delay to avoid ROS2 initialization conflicts
     time.sleep(1.0)
 
-    print(f"🚀 Launching left hand process...")
-    print(f"   Command: {' '.join(cmd_left)}")
-    proc_left = subprocess.Popen(
-        cmd_left,
+    print(f"🚀 Launching right hand process...")
+    print(f"   Command: {' '.join(cmd_right)}")
+    proc_right = subprocess.Popen(
+        cmd_right,
         stdout=sys.stdout,
         stderr=sys.stderr,
         preexec_fn=os.setsid if hasattr(os, 'setsid') else None,

@@ -203,7 +203,7 @@ class RightHardwarePlayer:
             self._last_step_t = t0
             if int(time.time()) % 5 == 0:
                 hz_est = 1.0 / max(dt, 1e-6)
-                print(f"[timer] {hz_est:.2f} Hz, skipped={self._skipped}")
+                print(f"[RIGHT] {hz_est:.2f} Hz, skipped={self._skipped}")
 
     # ---------- deploy ----------
     def deploy(self):

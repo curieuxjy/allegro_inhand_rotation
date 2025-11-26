@@ -114,9 +114,9 @@ class LeftHardwarePlayer:
         # init_pose in ROS2 order: thumb(0-3), index(4-7), middle(8-11), ring(12-15)
         self.init_pose_ros2 = np.array([
             1.1202, 1.1374, 0.8535, -0.0852,  # Thumb
-            0.0627, 1.2923, 0.3383, 0.1088,   # Index
-            0.0724, 1.1983, 0.1551, 0.1499,   # Middle
-            0.1343, 1.1736, 0.5355, 0.2164,   # Ring
+            -0.0627, 1.2923, 0.3383, 0.1088,   # Index
+            -0.0724, 1.1983, 0.1551, 0.1499,   # Middle
+            -0.1343, 1.1736, 0.5355, 0.2164,   # Ring
         ], dtype=np.float64)
 
         # state
@@ -203,7 +203,7 @@ class LeftHardwarePlayer:
             self._last_step_t = t0
             if int(time.time()) % 5 == 0:
                 hz_est = 1.0 / max(dt, 1e-6)
-                print(f"[timer] {hz_est:.2f} Hz, skipped={self._skipped}")
+                print(f"[LEFT] {hz_est:.2f} Hz, skipped={self._skipped}")
 
     # ---------- deploy ----------
     def deploy(self):
