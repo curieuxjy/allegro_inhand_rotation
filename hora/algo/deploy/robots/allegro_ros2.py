@@ -21,7 +21,7 @@ from typing import List, Optional
 
 import numpy as np
 import rclpy
-from rclpy.executors import SingleThreadedExecutor
+from rclpy.executors import SingleThreadedExecutor, MultiThreadedExecutor
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Float64MultiArray
@@ -68,7 +68,9 @@ class AllegroHandIO(Node):
         command_topic: Optional[str] = None,
         use_side_prefix: bool = False,  # True for two-hands setup (ahr_/ahl_), False for single hand (ah_)
     ):
-        super().__init__("allegro_hand_io")
+        # Use unique node name per side to avoid conflicts in multi-hand setup
+        node_name = f"allegro_hand_io_{side}" if use_side_prefix else "allegro_hand_io"
+        super().__init__(node_name)
 
         side = (side or "right").lower()
         if side not in ("right", "left"):
@@ -182,32 +184,64 @@ class AllegroHandIO(Node):
             except Exception:
                 self.get_logger().warn("poll_joint_position: index mapping failed, fallback to raw order.")
 
-        # Fallback on mapping failure — use the first 16
-        if len(js.position) >= 16:
+        # Fallback on mapping failure
+        # CRITICAL: For two-hands setup, index_map MUST work correctly!
+        num_joints = len(js.position)
+
+        if self.use_side_prefix:
+            # Two-hands setup: index_map is REQUIRED
+            # Without proper name-based mapping, data WILL be incorrect
+            self.get_logger().error(
+                f"[{self.side}] ❌ CRITICAL: index_map is None in two-hands mode!\n"
+                f"[{self.side}] Joint data will be INCORRECT. Check ROS2 joint names.\n"
+                f"[{self.side}] Expected names like: {self._desired_names[0]}, {self._desired_names[1]}, ..."
+            )
+            # Return None to indicate failure - better than returning wrong data
+            return None
+
+        # Single hand fallback (original behavior)
+        if num_joints >= 16:
             return np.array(js.position[:16], dtype=float)
 
         return None
 
 
     def _build_index_map(self, joint_names: List[str]) -> Optional[List[int]]:
-        """Create Allegro 16D index mapping from the list of joint_states names."""
+        """Create Allegro 16D index mapping from the list of joint_states names.
+
+        This is critical for two-hands setup where joint names are mixed in /joint_states.
+        """
         name_to_index = {n.lower(): i for i, n in enumerate(joint_names)}
         index_map = []
 
+        self.get_logger().info(
+            f"[{self.side}] Building index map from {len(joint_names)} joints..."
+        )
+        self.get_logger().info(
+            f"[{self.side}] Looking for: {self._desired_names[0]}, {self._desired_names[1]}, ... {self._desired_names[-1]}"
+        )
+
+        missing_joints = []
         for desired in self._desired_names:
             idx = name_to_index.get(desired.lower())
             if idx is None:
-                # If even one match fails, invalidate the entire mapping
-                self.get_logger().info(
-                    f"Joint name matching failed for '{desired}'. "
-                    f"Available names: {joint_names[:20] if len(joint_names) <= 20 else joint_names[:20] + ['...']}\n"
-                    f"Using fallback mode (raw order from /joint_states)."
-                )
-                return None
-            index_map.append(idx)
+                missing_joints.append(desired)
+            else:
+                index_map.append(idx)
+
+        if missing_joints:
+            self.get_logger().error(
+                f"[{self.side}] ❌ Joint name matching FAILED for: {missing_joints}\n"
+                f"[{self.side}] Available names: {sorted(joint_names)}\n"
+                f"[{self.side}] This will cause incorrect data! Check ROS2 joint names."
+            )
+            return None
 
         if len(index_map) == 16:
-            self.get_logger().info(f"Successfully mapped joint names: {self._desired_names[0]}, {self._desired_names[1]}, ...")
+            self.get_logger().info(
+                f"[{self.side}] ✓ Successfully mapped all 16 joints. "
+                f"Index map: {index_map[:4]}...{index_map[-4:]}"
+            )
             return index_map
         return None
 
@@ -255,14 +289,18 @@ class _Runner:
             self.node.destroy_node()
 
 
-def start_allegro_io(side: str = "right") -> AllegroHandIO:
+def start_allegro_io(side: str = "right", use_side_prefix: bool = False) -> AllegroHandIO:
     """
     Start a single Allegro hand I/O node.
-    Uses generic joint names without side prefix (ah_joint00, ah_joint01, ...).
+
+    Args:
+        side: "right" or "left"
+        use_side_prefix: If True, use side-specific joint names (ahr_*/ahl_*) for two-hands setup.
+                        If False, use generic names (ah_*) for single-hand setup.
     """
     if not rclpy.ok():
         rclpy.init()
-    io = AllegroHandIO(side=side, use_side_prefix=False)  # Single hand: no side prefix
+    io = AllegroHandIO(side=side, use_side_prefix=use_side_prefix)
     io._runner = _Runner(io)   # keep reference
     io._runner.start()
     return io
@@ -281,13 +319,18 @@ def stop_allegro_io(io: AllegroHandIO):
 
 # --- Add: Run multiple nodes in one executor ---
 class _RunnerMany:
+    """
+    Run multiple ROS2 nodes using MultiThreadedExecutor.
+    Each node's callbacks can execute in parallel, improving responsiveness
+    for two-hands control scenarios.
+    """
     def __init__(self, nodes):
-        from rclpy.executors import SingleThreadedExecutor
         self.nodes = nodes
-        self.exec = SingleThreadedExecutor()
+        # Use MultiThreadedExecutor for parallel callback processing
+        # This allows each hand's timer and subscription callbacks to run independently
+        self.exec = MultiThreadedExecutor(num_threads=len(nodes) * 2)
         for n in nodes:
             self.exec.add_node(n)
-        import threading
         self.thread = threading.Thread(target=self.exec.spin, daemon=True)
 
     def start(self):
@@ -304,22 +347,34 @@ def start_allegro_ios(sides=("right", "left")):
     """
     Start multiple Allegro hand I/O nodes (for two-hands setup).
     Uses side-specific joint names with prefix (ahr_joint00, ahl_joint00, ...).
+
+    Each hand gets its own independent executor and thread, matching the
+    single-hand behavior for maximum reliability.
     """
     if not rclpy.ok():
         rclpy.init()
-    nodes = [AllegroHandIO(side=s, use_side_prefix=True) for s in sides]  # Two hands: use side prefix
-    runner = _RunnerMany(nodes)
-    runner.start()
-    # Keep a reference to the runner (needed for cleanup)
-    for n in nodes:
-        n._runner_many = runner
-    return {n.side: n for n in nodes}
+
+    nodes = {}
+    for s in sides:
+        io = AllegroHandIO(side=s, use_side_prefix=True)
+        # Each hand gets its own _Runner (independent executor + thread)
+        # This matches single-hand behavior exactly
+        io._runner = _Runner(io)
+        io._runner.start()
+        nodes[s] = io
+
+    return nodes
 
 def stop_allegro_ios(nodes_dict):
-    # Since they share the same runner, just turn off one
-    any_node = next(iter(nodes_dict.values()))
-    if hasattr(any_node, "_runner_many"):
-        any_node._runner_many.stop()
+    """Stop all Allegro hand I/O nodes."""
+    # Each node has its own _Runner, stop them all
+    for node in nodes_dict.values():
+        if hasattr(node, "_runner") and node._runner:
+            try:
+                node._runner.stop()
+            except Exception:
+                pass
+
     if rclpy.ok():
         try:
             rclpy.shutdown()

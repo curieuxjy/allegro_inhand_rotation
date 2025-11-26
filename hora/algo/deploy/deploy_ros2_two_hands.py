@@ -6,434 +6,140 @@
 
 """
 Two-hands deployment script for Allegro hands (left + right)
+
+Launches two completely independent subprocesses - one for each hand.
+This is equivalent to running the single-hand scripts in two separate terminals.
 """
+import os
+import sys
 import time
 import signal
-
-import numpy as np
-import torch
-
-from hora.algo.deploy.robots.allegro_ros2 import start_allegro_ios, stop_allegro_ios
-
-from hora.algo.models.models import ActorCritic
-from hora.algo.models.running_mean_std import RunningMeanStd
-from hora.utils.misc import tprint
+import subprocess
+from pathlib import Path
 
 
-# =========================================================
-# Conversion/rearrangement utility (direct hora <-> ros2)
-# =========================================================
-
-def _action_hora2ros2_right(actions):
-    """Convert hora ordering directly to ROS2 ordering for RIGHT hand
-
-    Right hand hora order: index(0-3), thumb(4-7), middle(8-11), ring(12-15)
-    ROS2 order: thumb(0-3), index(4-7), middle(8-11), ring(12-15)
-    """
-    if isinstance(actions, torch.Tensor):
-        if actions.dim() > 1:
-            actions = actions.view(-1)
-        cmd = actions.clone()
-        cmd[[0, 1, 2, 3]] = actions[[4, 5, 6, 7]]       # thumb
-        cmd[[4, 5, 6, 7]] = actions[[0, 1, 2, 3]]       # index
-        return cmd
-    else:
-        a = np.asarray(actions).flatten()
-        cmd = a.copy()
-        cmd[[0, 1, 2, 3]] = a[[4, 5, 6, 7]]       # thumb
-        cmd[[4, 5, 6, 7]] = a[[0, 1, 2, 3]]       # index
-        return cmd
-
-
-def _action_hora2ros2_left(actions):
-    """Convert hora ordering directly to ROS2 ordering for LEFT hand
-
-    Left hand hora order: ring(0-3), thumb(4-7), middle(8-11), index(12-15)
-    ROS2 order: thumb(0-3), index(4-7), middle(8-11), ring(12-15)
-    """
-    if isinstance(actions, torch.Tensor):
-        if actions.dim() > 1:
-            actions = actions.view(-1)
-        cmd = actions.clone()
-        cmd[[0, 1, 2, 3]] = actions[[4, 5, 6, 7]]       # thumb
-        cmd[[4, 5, 6, 7]] = actions[[12, 13, 14, 15]]   # index
-        cmd[[8, 9, 10, 11]] = actions[[8, 9, 10, 11]]   # middle (same)
-        cmd[[12, 13, 14, 15]] = actions[[0, 1, 2, 3]]   # ring
-        return cmd
-    else:
-        a = np.asarray(actions).flatten()
-        cmd = a.copy()
-        cmd[[0, 1, 2, 3]] = a[[4, 5, 6, 7]]       # thumb
-        cmd[[4, 5, 6, 7]] = a[[12, 13, 14, 15]]   # index
-        cmd[[8, 9, 10, 11]] = a[[8, 9, 10, 11]]   # middle (same)
-        cmd[[12, 13, 14, 15]] = a[[0, 1, 2, 3]]   # ring
-        return cmd
-
-
-def _obs_ros22hora_right(o):
-    """Convert ROS2 ordering directly to hora ordering for RIGHT hand
-
-    ROS2 order: thumb(0-3), index(4-7), middle(8-11), ring(12-15)
-    Right hand hora order: index(0-3), thumb(4-7), middle(8-11), ring(12-15)
-    """
-    return np.concatenate([o[4:8], o[0:4], o[8:12], o[12:16]]).astype(np.float64)
-
-
-def _obs_ros22hora_left(o):
-    """Convert ROS2 ordering directly to hora ordering for LEFT hand
-
-    ROS2 order: thumb(0-3), index(4-7), middle(8-11), ring(12-15)
-    Left hand hora order: ring(0-3), thumb(4-7), middle(8-11), index(12-15)
-    """
-    return np.concatenate([o[12:16], o[0:4], o[8:12], o[4:8]]).astype(np.float64)
-
-
-# =========================================================
-# Control agent (Timer-based, two hands)
-# =========================================================
-
-class HardwarePlayerTwoHands:
-    """
-    Two-hands hardware player for bimanual Allegro hand control.
-    Uses the same single-hand model independently for each hand.
-    """
-    def __init__(self, hz: float = 20.0, device: str = "cuda", debug: bool = False):
-        torch.set_grad_enabled(False)
-        self.hz = float(hz)
-        self.device = device
-        self.debug = debug
-        self._debug_counter = 0
-
-        # Model configuration for single hand (will be used twice)
-        obs_shape = (96,)
-
-        # Create two separate model instances (one per hand)
-        net_config_right = {
-            "actions_num": 16,
-            "input_shape": obs_shape,
-            "actor_units": [512, 256, 128],
-            "priv_mlp_units": [256, 128, 8],
-            "priv_info": True,
-            "proprio_adapt": True,
-            "priv_info_dim": 9,
-        }
-        net_config_left = {
-            "actions_num": 16,
-            "input_shape": obs_shape,
-            "actor_units": [512, 256, 128],
-            "priv_mlp_units": [256, 128, 8],
-            "priv_info": True,
-            "proprio_adapt": True,
-            "priv_info_dim": 9,
-        }
-
-        self.model_right = ActorCritic(net_config_right).to(self.device).eval()
-        self.model_left = ActorCritic(net_config_left).to(self.device).eval()
-
-        # Create separate normalization for each hand
-        self.running_mean_std_right = RunningMeanStd(obs_shape).to(self.device).eval()
-        self.running_mean_std_left = RunningMeanStd(obs_shape).to(self.device).eval()
-        self.sa_mean_std_right = RunningMeanStd((30, 32)).to(self.device).eval()
-        self.sa_mean_std_left = RunningMeanStd((30, 32)).to(self.device).eval()
-
-        # Buffers (separate for each hand)
-        self.obs_buf_right = torch.zeros((1, 96), dtype=torch.float32, device=self.device)
-        self.obs_buf_left = torch.zeros((1, 96), dtype=torch.float32, device=self.device)
-        self.proprio_hist_buf_right = torch.zeros((1, 30, 32), dtype=torch.float32, device=self.device)
-        self.proprio_hist_buf_left = torch.zeros((1, 30, 32), dtype=torch.float32, device=self.device)
-
-        # Limits (hora order: index, thumb, middle, ring)
-        self.allegro_dof_lower = torch.tensor([
-            -0.4700, -0.1960, -0.1740, -0.2270,   # Index
-             0.2630, -0.1050, -0.1890, -0.1620,   # Thumb
-            -0.4700, -0.1960, -0.1740, -0.2270,   # Middle
-            -0.4700, -0.1960, -0.1740, -0.2270,   # Ring
-        ], dtype=torch.float32, device=self.device)
-        self.allegro_dof_upper = torch.tensor([
-             0.4700, 1.6100, 1.7090, 1.6180,      # Index
-             1.3960, 1.1630, 1.6440, 1.7190,      # Thumb
-             0.4700, 1.6100, 1.7090, 1.6180,      # Middle
-             0.4700, 1.6100, 1.7090, 1.6180,      # Ring
-        ], dtype=torch.float32, device=self.device)
-
-        # init_pose in ROS2 order: thumb(0-3), index(4-7), middle(8-11), ring(12-15)
-        self.init_pose_ros2 = np.array([
-            1.1202, 1.1374, 0.8535, -0.0852,  # Thumb
-            0.0627, 1.2923, 0.3383, 0.1088,   # Index
-            0.0724, 1.1983, 0.1551, 0.1499,   # Middle
-            0.1343, 1.1736, 0.5355, 0.2164,   # Ring
-        ], dtype=np.float64)
-
-        # State (separate for each hand)
-        self.action_scale = 1.0 / 24.0
-        self.prev_target_right = torch.zeros((1, 16), dtype=torch.float32, device=self.device)
-        self.prev_target_left = torch.zeros((1, 16), dtype=torch.float32, device=self.device)
-        self.cur_target_right = torch.zeros((1, 16), dtype=torch.float32, device=self.device)
-        self.cur_target_left = torch.zeros((1, 16), dtype=torch.float32, device=self.device)
-        self._last_obs_q_right = None
-        self._last_obs_q_left = None
-        self._skipped_right = 0
-        self._skipped_left = 0
-        self._last_step_t = None
-
-        # ROS (two hands)
-        self.timer = None
-        self.allegro_ios = None
-
-    # ---------- utils ----------
-    @staticmethod
-    def _unscale(x, lower, upper):
-        return (2.0 * x - upper - lower) / (upper - lower)
-
-    def _pre_physics_step_single(self, action, prev_target):
-        """Update target for a single hand"""
-        target = prev_target + self.action_scale * action
-        cur_target = torch.clamp(target, min=self.allegro_dof_lower, max=self.allegro_dof_upper)
-        return cur_target
-
-    def _post_physics_step_single(self, obses, cur_target, obs_buf, proprio_hist_buf):
-        """Update observation buffers for a single hand"""
-        cur_obs = self._unscale(
-            obses.view(-1), self.allegro_dof_lower, self.allegro_dof_upper
-        ).view(1, 16)
-
-        # Roll obs_buf (96 = 32*3)
-        src64 = obs_buf[:, 32:96].clone()
-        obs_buf[:, 0:64] = src64
-        obs_buf[:, 64:80] = cur_obs
-        obs_buf[:, 80:96] = cur_target
-
-        # Roll proprio_hist_buf (T=30)
-        src_hist = proprio_hist_buf[:, 1:, :].clone()
-        proprio_hist_buf[:, 0:-1, :] = src_hist
-        proprio_hist_buf[:, -1, :16] = cur_obs
-        proprio_hist_buf[:, -1, 16:32] = cur_target
-
-    # ---------- timer callback ----------
-    @torch.inference_mode()
-    def _control_step(self):
-        t0 = time.perf_counter()
-
-        # Process right hand
-        obs_norm_right = self.running_mean_std_right(self.obs_buf_right)
-        input_dict_right = {
-            "obs": obs_norm_right,
-            "proprio_hist": self.sa_mean_std_right(self.proprio_hist_buf_right),
-        }
-        action_right = torch.clamp(self.model_right.act_inference(input_dict_right), -1.0, 1.0)
-        self.cur_target_right = self._pre_physics_step_single(action_right, self.prev_target_right)
-        self.prev_target_right = self.cur_target_right
-
-        # Process left hand
-        obs_norm_left = self.running_mean_std_left(self.obs_buf_left)
-        input_dict_left = {
-            "obs": obs_norm_left,
-            "proprio_hist": self.sa_mean_std_left(self.proprio_hist_buf_left),
-        }
-        action_left = torch.clamp(self.model_left.act_inference(input_dict_left), -1.0, 1.0)
-        self.cur_target_left = self._pre_physics_step_single(action_left, self.prev_target_left)
-        self.prev_target_left = self.cur_target_left
-
-        # Publish commands (hora -> ros2 direct)
-        cmd_right = self.cur_target_right.detach().to("cpu").numpy()[0]
-        ros2_right = _action_hora2ros2_right(cmd_right)
-        self.allegro_ios["right"].command_joint_position(ros2_right)
-
-        cmd_left = self.cur_target_left.detach().to("cpu").numpy()[0]
-        ros2_left = _action_hora2ros2_left(cmd_left)
-        self.allegro_ios["left"].command_joint_position(ros2_left)
-
-        # Debug logging
-        if self.debug and self._debug_counter % 100 == 0:
-            print(f"\n[DEBUG] Step {self._debug_counter}")
-            print(f"  cmd_right (hora): {cmd_right[:4]}")
-            print(f"  cmd_left  (hora): {cmd_left[:4]}")
-            print(f"  ros2_right[:4]: {ros2_right[:4]}")
-            print(f"  ros2_left[:4]:  {ros2_left[:4]}")
-        self._debug_counter += 1
-
-        # Non-blocking obs update (ros2 -> hora direct)
-        q_pos_right = self.allegro_ios["right"].poll_joint_position(wait=False, timeout=0.0)
-        if q_pos_right is not None:
-            hora_q_right = _obs_ros22hora_right(q_pos_right)
-            obs_q_right = torch.from_numpy(hora_q_right.astype(np.float32)).to(self.device)
-            self._last_obs_q_right = obs_q_right
-        else:
-            obs_q_right = self._last_obs_q_right
-            self._skipped_right += 1
-
-        q_pos_left = self.allegro_ios["left"].poll_joint_position(wait=False, timeout=0.0)
-        if q_pos_left is not None:
-            hora_q_left = _obs_ros22hora_left(q_pos_left)
-            obs_q_left = torch.from_numpy(hora_q_left.astype(np.float32)).to(self.device)
-            self._last_obs_q_left = obs_q_left
-        else:
-            obs_q_left = self._last_obs_q_left
-            self._skipped_left += 1
-
-        # Update buffers
-        if obs_q_right is not None:
-            self._post_physics_step_single(obs_q_right, self.cur_target_right,
-                                          self.obs_buf_right, self.proprio_hist_buf_right)
-        if obs_q_left is not None:
-            self._post_physics_step_single(obs_q_left, self.cur_target_left,
-                                          self.obs_buf_left, self.proprio_hist_buf_left)
-
-        # Light jitter log
-        if self._last_step_t is None:
-            self._last_step_t = t0
-        else:
-            dt = t0 - self._last_step_t
-            self._last_step_t = t0
-            if int(time.time()) % 5 == 0:
-                hz_est = 1.0 / max(dt, 1e-6)
-                print(f"[timer] {hz_est:.2f} Hz, skipped_right={self._skipped_right}, skipped_left={self._skipped_left}")
-
-    # ---------- deploy ----------
-    def deploy(self):
-        run_start_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-        print(f"🧠🧠 Starting Two-Hands HardwarePlayer deployment at {run_start_time}...")
-
-        # Start ROS2 I/O for both hands
-        self.allegro_ios = start_allegro_ios(sides=("right", "left"))
-
-        # Warmup
-        warmup = int(self.hz * 8)
-        for t in range(warmup):
-            tprint(f"setup {t} / {warmup}")
-            self.allegro_ios["right"].command_joint_position(self.init_pose_ros2)
-            self.allegro_ios["left"].command_joint_position(self.init_pose_ros2)
-            time.sleep(1.0 / self.hz)
-
-        # First observation (ros2 -> hora direct)
-        q_pos_right = self.allegro_ios["right"].poll_joint_position(wait=True, timeout=5.0)
-        q_pos_left = self.allegro_ios["left"].poll_joint_position(wait=True, timeout=5.0)
-
-        if q_pos_right is None or q_pos_left is None:
-            print("❌ Failed to read joint state from one or both hands.")
-            stop_allegro_ios(self.allegro_ios)
-            return
-
-        hora_q_right = _obs_ros22hora_right(q_pos_right)
-        obs_q_right = torch.from_numpy(hora_q_right.astype(np.float32)).to(self.device)
-        self._last_obs_q_right = obs_q_right
-
-        hora_q_left = _obs_ros22hora_left(q_pos_left)
-        obs_q_left = torch.from_numpy(hora_q_left.astype(np.float32)).to(self.device)
-        self._last_obs_q_left = obs_q_left
-
-        # Initialize buffers for right hand
-        cur_obs_buf_right = self._unscale(obs_q_right, self.allegro_dof_lower, self.allegro_dof_upper)[None]
-        self.prev_target_right = obs_q_right[None]
-        for i in range(3):
-            self.obs_buf_right[:, i*32:i*32+16] = cur_obs_buf_right
-            self.obs_buf_right[:, i*32+16:i*32+32] = self.prev_target_right
-        self.proprio_hist_buf_right[:, :, :16] = cur_obs_buf_right
-        self.proprio_hist_buf_right[:, :, 16:32] = self.prev_target_right
-
-        # Initialize buffers for left hand
-        cur_obs_buf_left = self._unscale(obs_q_left, self.allegro_dof_lower, self.allegro_dof_upper)[None]
-        self.prev_target_left = obs_q_left[None]
-        for i in range(3):
-            self.obs_buf_left[:, i*32:i*32+16] = cur_obs_buf_left
-            self.obs_buf_left[:, i*32+16:i*32+32] = self.prev_target_left
-        self.proprio_hist_buf_left[:, :, :16] = cur_obs_buf_left
-        self.proprio_hist_buf_left[:, :, 16:32] = self.prev_target_left
-
-        # Register timer
-        period = 1.0 / self.hz
-        self.timer = self.allegro_ios["right"].create_timer(period, self._control_step)
-        print(f"Deployment started (timer-based {self.hz:.1f} Hz, TWO HANDS). Ctrl+C to stop.")
-
-        # Main thread: signal handling + keep alive
-        interrupted = False
-
-        def _sigint(_sig, _frm):
-            nonlocal interrupted
-            interrupted = True
-        signal.signal(signal.SIGINT, _sigint)
-
-        try:
-            while not interrupted:
-                time.sleep(0.2)
-        finally:
-            try:
-                if self.timer is not None:
-                    self.timer.cancel()
-            except Exception:
-                pass
-            try:
-                self.allegro_ios["right"].go_safe(self.init_pose_ros2)
-                self.allegro_ios["left"].go_safe(self.init_pose_ros2)
-                time.sleep(1.0)
-            except Exception:
-                pass
-            stop_allegro_ios(self.allegro_ios)
-            print("🧠🧠 Two-Hands Deployment stopped cleanly.")
-
-            run_end_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-
-            fmt = "%Y-%m-%d %H:%M:%S"
-            try:
-                t0 = time.mktime(time.strptime(run_start_time, fmt))
-                t1 = time.mktime(time.strptime(run_end_time, fmt))
-                elapsed = int(round(t1 - t0))
-                hrs, rem = divmod(elapsed, 3600)
-                mins, secs = divmod(rem, 60)
-                print(f"🧠🧠 Total Running Time: {hrs:02d}:{mins:02d}:{secs:02d}")
-            except Exception:
-                print(f"🔥 Run started at {run_start_time}, ended at {run_end_time}")
-
-    # ---------- checkpoint ----------
-    def restore(self, checkpoint_right, checkpoint_left=None):
-        """Load checkpoints for both hands independently."""
-        print(f"📦 Loading right hand checkpoint: {checkpoint_right}")
-        ckpt_right = torch.load(checkpoint_right, map_location=self.device)
-        self.running_mean_std_right.load_state_dict(ckpt_right["running_mean_std"])
-        self.model_right.load_state_dict(ckpt_right["model"])
-        self.sa_mean_std_right.load_state_dict(ckpt_right["sa_mean_std"])
-
-        if checkpoint_left is None:
-            print(f"📦 Using same checkpoint for left hand")
-            checkpoint_left = checkpoint_right
-
-        if checkpoint_left == checkpoint_right:
-            self.running_mean_std_left.load_state_dict(ckpt_right["running_mean_std"])
-            self.model_left.load_state_dict(ckpt_right["model"])
-            self.sa_mean_std_left.load_state_dict(ckpt_right["sa_mean_std"])
-        else:
-            print(f"📦 Loading left hand checkpoint: {checkpoint_left}")
-            ckpt_left = torch.load(checkpoint_left, map_location=self.device)
-            self.running_mean_std_left.load_state_dict(ckpt_left["running_mean_std"])
-            self.model_left.load_state_dict(ckpt_left["model"])
-            self.sa_mean_std_left.load_state_dict(ckpt_left["sa_mean_std"])
-
-
-# =========================================================
-# Execution example
-# =========================================================
-if __name__ == "__main__":
+def main():
     import argparse
 
-    parser = argparse.ArgumentParser(description="Two-Hands Allegro Hand Deployment")
+    parser = argparse.ArgumentParser(
+        description="Two-Hands Allegro Hand Deployment (Subprocess Launcher)"
+    )
     parser.add_argument("--checkpoint-right", type=str, required=True,
                         help="Path to checkpoint file for right hand (.pth)")
     parser.add_argument("--checkpoint-left", type=str, default=None,
                         help="Path to checkpoint file for left hand (.pth). If not specified, uses same as right.")
     parser.add_argument("--hz", type=float, default=20.0,
                         help="Control frequency in Hz (default: 20.0)")
-    parser.add_argument("--device", type=str, default=None,
-                        help="Device to use (cuda/cpu). Auto-detects if not specified.")
-    parser.add_argument("--debug", action="store_true",
-                        help="Enable debug output")
+    parser.add_argument("--device", type=str, default="cuda",
+                        help="Device to use (cuda/cpu). Default: cuda")
 
     args = parser.parse_args()
 
-    if args.device is None:
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-    else:
-        device = args.device
+    checkpoint_right = args.checkpoint_right
+    checkpoint_left = args.checkpoint_left if args.checkpoint_left else args.checkpoint_right
 
-    agent = HardwarePlayerTwoHands(hz=args.hz, device=device, debug=args.debug)
-    agent.restore(args.checkpoint_right, args.checkpoint_left)
-    agent.deploy()
+    # Verify checkpoints exist
+    if not os.path.exists(checkpoint_right):
+        print(f"❌ Right hand checkpoint not found: {checkpoint_right}")
+        sys.exit(1)
+    if not os.path.exists(checkpoint_left):
+        print(f"❌ Left hand checkpoint not found: {checkpoint_left}")
+        sys.exit(1)
+
+    run_start_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+    print(f"🧠🧠 Starting Two-Hands deployment (subprocess) at {run_start_time}")
+    print(f"📦 Right: {checkpoint_right}")
+    print(f"📦 Left:  {checkpoint_left}")
+    print()
+
+    # Build commands for each hand
+    # Using the single-hand scripts with --use-side-prefix for two-hands joint names
+    base_dir = Path(__file__).parent
+
+    cmd_right = [
+        sys.executable, "-m", "hora.algo.deploy.deploy_ros2_right",
+        "--checkpoint", checkpoint_right,
+        "--hz", str(args.hz),
+        "--device", args.device,
+        "--use-side-prefix",  # Use ahr_* joint names
+    ]
+
+    cmd_left = [
+        sys.executable, "-m", "hora.algo.deploy.deploy_ros2_left",
+        "--checkpoint", checkpoint_left,
+        "--hz", str(args.hz),
+        "--device", args.device,
+        "--use-side-prefix",  # Use ahl_* joint names
+    ]
+
+    print(f"🚀 Launching right hand process...")
+    print(f"   Command: {' '.join(cmd_right)}")
+    proc_right = subprocess.Popen(
+        cmd_right,
+        stdout=sys.stdout,
+        stderr=sys.stderr,
+        # Each process gets its own process group for clean signal handling
+        preexec_fn=os.setsid if hasattr(os, 'setsid') else None,
+    )
+
+    # Small delay to avoid ROS2 initialization conflicts
+    time.sleep(1.0)
+
+    print(f"🚀 Launching left hand process...")
+    print(f"   Command: {' '.join(cmd_left)}")
+    proc_left = subprocess.Popen(
+        cmd_left,
+        stdout=sys.stdout,
+        stderr=sys.stderr,
+        preexec_fn=os.setsid if hasattr(os, 'setsid') else None,
+    )
+
+    print()
+    print(f"🧠🧠 Both hands running. Press Ctrl+C to stop both.")
+    print()
+
+    # Handle Ctrl+C
+    def signal_handler(sig, frame):
+        print("\n🧠🧠 Stopping both hands...")
+        # Send SIGINT to both processes
+        try:
+            if proc_right.poll() is None:
+                os.killpg(os.getpgid(proc_right.pid), signal.SIGINT)
+        except Exception:
+            proc_right.terminate()
+        try:
+            if proc_left.poll() is None:
+                os.killpg(os.getpgid(proc_left.pid), signal.SIGINT)
+        except Exception:
+            proc_left.terminate()
+
+    signal.signal(signal.SIGINT, signal_handler)
+
+    # Wait for both processes
+    try:
+        while proc_right.poll() is None or proc_left.poll() is None:
+            time.sleep(0.5)
+    except KeyboardInterrupt:
+        pass
+
+    # Final cleanup
+    proc_right.wait(timeout=5.0)
+    proc_left.wait(timeout=5.0)
+
+    run_end_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+    print(f"🧠🧠 Two-Hands Deployment stopped.")
+
+    fmt = "%Y-%m-%d %H:%M:%S"
+    try:
+        t0 = time.mktime(time.strptime(run_start_time, fmt))
+        t1 = time.mktime(time.strptime(run_end_time, fmt))
+        elapsed = int(round(t1 - t0))
+        hrs, rem = divmod(elapsed, 3600)
+        mins, secs = divmod(rem, 60)
+        print(f"🧠🧠 Total Running Time: {hrs:02d}:{mins:02d}:{secs:02d}")
+    except Exception:
+        print(f"🔥 Run started at {run_start_time}, ended at {run_end_time}")
+
+
+if __name__ == "__main__":
+    main()

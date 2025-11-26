@@ -38,4 +38,7 @@ echo "Both checkpoints found"
 echo ""
 echo "Starting deployment..."
 
-python run.py +checkpoint_right="${CHECKPOINT_RIGHT}" +checkpoint_left="${CHECKPOINT_LEFT}" "$@"
+python -m hora.algo.deploy.deploy_ros2_two_hands \
+    --checkpoint-right="${CHECKPOINT_RIGHT}" \
+    --checkpoint-left="${CHECKPOINT_LEFT}" \
+    "$@"

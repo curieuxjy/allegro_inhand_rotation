@@ -76,6 +76,7 @@ class RightHardwarePlayer:
         torch.set_grad_enabled(False)
         self.hz = float(hz)
         self.device = device
+        self.use_side_prefix = False  # Set True for two-hands setup
 
         # model / rms
         obs_shape = (96,)
@@ -210,7 +211,7 @@ class RightHardwarePlayer:
         print(f"🧠 Starting RightHardwarePlayer deployment at {run_start_time}...")
 
         # Start ROS2 I/O (background executor)
-        self.allegro = start_allegro_io(side='right')
+        self.allegro = start_allegro_io(side='right', use_side_prefix=self.use_side_prefix)
 
         # Warm-up (blocking) — settle hardware
         warmup = int(self.hz * 8)
@@ -291,10 +292,29 @@ class RightHardwarePlayer:
 
 
 # =========================================================
-# Execution example
+# Execution
 # =========================================================
 if __name__ == "__main__":
-    agent = RightHardwarePlayer(hz=20.0, device="cuda" if torch.cuda.is_available() else "cpu")
-    # Load checkpoint if necessary
-    # agent.restore("/path/to/checkpoint.pth")
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Right Hand Allegro Deployment")
+    parser.add_argument("--checkpoint", type=str, required=True,
+                        help="Path to checkpoint file (.pth)")
+    parser.add_argument("--hz", type=float, default=20.0,
+                        help="Control frequency in Hz (default: 20.0)")
+    parser.add_argument("--device", type=str, default=None,
+                        help="Device to use (cuda/cpu). Auto-detects if not specified.")
+    parser.add_argument("--use-side-prefix", action="store_true",
+                        help="Use side-specific joint names (ahr_*) for two-hands setup")
+
+    args = parser.parse_args()
+
+    if args.device is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    else:
+        device = args.device
+
+    agent = RightHardwarePlayer(hz=args.hz, device=device)
+    agent.use_side_prefix = args.use_side_prefix  # Pass to deploy
+    agent.restore(args.checkpoint)
     agent.deploy()
