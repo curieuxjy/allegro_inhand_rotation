@@ -4,15 +4,12 @@
 # This software is licensed under the MIT License.
 # See the LICENSE file in the project root for full license text.
 
-# import os
 import time
 import signal
-# from typing import List, Optional
 
 import numpy as np
 import torch
 
-# one hand (right)
 from hora.algo.deploy.robots.allegro_ros2 import start_allegro_io, stop_allegro_io
 
 from hora.algo.models.models import ActorCritic
@@ -24,40 +21,50 @@ from hora.utils.misc import tprint
 # Conversion/rearrangement utility
 # =========================================================
 
-def _action_hora2allegro(actions):
+def _action_hora2ros2_right(actions):
+    """Convert hora ordering directly to ROS2 ordering for RIGHT hand
+
+    Right hand hora order: index(0-3), thumb(4-7), middle(8-11), ring(12-15)
+    ROS2 order: thumb(0-3), index(4-7), middle(8-11), ring(12-15)
+
+    Direct mapping:
+      ros2[0-3]   = hora[4-7]   (thumb)
+      ros2[4-7]   = hora[0-3]   (index)
+      ros2[8-11]  = hora[8-11]  (middle)
+      ros2[12-15] = hora[12-15] (ring)
+    """
     if isinstance(actions, torch.Tensor):
         if actions.dim() > 1:
             actions = actions.view(-1)
-        cmd_act = actions.clone()
-        temp = actions[[4, 5, 6, 7]].clone()
-        cmd_act[[4, 5, 6, 7]] = actions[[8, 9, 10, 11]]
-        cmd_act[[12, 13, 14, 15]] = temp
-        cmd_act[[8, 9, 10, 11]] = actions[[12, 13, 14, 15]]
-        return cmd_act
+        cmd = actions.clone()
+        cmd[[0, 1, 2, 3]] = actions[[4, 5, 6, 7]]       # thumb
+        cmd[[4, 5, 6, 7]] = actions[[0, 1, 2, 3]]       # index
+        cmd[[8, 9, 10, 11]] = actions[[8, 9, 10, 11]]   # middle (same)
+        cmd[[12, 13, 14, 15]] = actions[[12, 13, 14, 15]]  # ring (same)
+        return cmd
     else:
         a = np.asarray(actions).flatten()
         cmd = a.copy()
-        temp = a[[4, 5, 6, 7]].copy()
-        cmd[[4, 5, 6, 7]] = a[[8, 9, 10, 11]]
-        cmd[[12, 13, 14, 15]] = temp
-        cmd[[8, 9, 10, 11]] = a[[12, 13, 14, 15]]
+        cmd[[0, 1, 2, 3]] = a[[4, 5, 6, 7]]       # thumb
+        cmd[[4, 5, 6, 7]] = a[[0, 1, 2, 3]]       # index
+        cmd[[8, 9, 10, 11]] = a[[8, 9, 10, 11]]   # middle (same)
+        cmd[[12, 13, 14, 15]] = a[[12, 13, 14, 15]]  # ring (same)
         return cmd
 
 
-def _obs_allegro2hora(o):
-    # allegro: index - middle - ring - thumb
-    # hora   : index, thumb, middle, ring
-    return np.concatenate([o[0:4], o[12:16], o[4:8], o[8:12]]).astype(np.float64)
+def _obs_ros22hora_right(o):
+    """Convert ROS2 ordering directly to hora ordering for RIGHT hand
 
+    ROS2 order: thumb(0-3), index(4-7), middle(8-11), ring(12-15)
+    Right hand hora order: index(0-3), thumb(4-7), middle(8-11), ring(12-15)
 
-def _reorder_imrt2timr(imrt):
-    # [ROS1] index-middle-ring-thumb → [ROS2] thumb-index-middle-ring
-    return np.concatenate([imrt[12:16], imrt[0:12]]).astype(np.float64)
-
-
-def _reorder_timr2imrt(timr):
-    # [ROS2] thumb-index-middle-ring → [ROS1] index-middle-ring-thumb
-    return np.concatenate([timr[4:16], timr[0:4]]).astype(np.float64)
+    Direct mapping:
+      hora[0-3]   = ros2[4-7]   (index)
+      hora[4-7]   = ros2[0-3]   (thumb)
+      hora[8-11]  = ros2[8-11]  (middle)
+      hora[12-15] = ros2[12-15] (ring)
+    """
+    return np.concatenate([o[4:8], o[0:4], o[8:12], o[12:16]]).astype(np.float64)
 
 
 # =========================================================
@@ -89,7 +96,7 @@ class RightHardwarePlayer:
         self.obs_buf = torch.zeros((1, 96), dtype=torch.float32, device=self.device)
         self.proprio_hist_buf = torch.zeros((1, 30, 32), dtype=torch.float32, device=self.device)
 
-        # limits
+        # limits (hora order: index, thumb, middle, ring)
         self.allegro_dof_lower = torch.tensor([
             -0.4700, -0.1960, -0.1740, -0.2270,   # Index
              0.2630, -0.1050, -0.1890, -0.1620,   # Thumb
@@ -103,13 +110,13 @@ class RightHardwarePlayer:
              0.4700, 1.6100, 1.7090, 1.6180,      # Ring
         ], dtype=torch.float32, device=self.device)
 
-        # poses
-        self.init_pose = [
-            0.0627, 1.2923, 0.3383, 0.1088,
-            0.0724, 1.1983, 0.1551, 0.1499,
-            0.1343, 1.1736, 0.5355, 0.2164,
-            1.1202, 1.1374, 0.8535, -0.0852,
-        ]
+        # init_pose in ROS2 order: thumb(0-3), index(4-7), middle(8-11), ring(12-15)
+        self.init_pose_ros2 = np.array([
+            1.1202, 1.1374, 0.8535, -0.0852,  # Thumb
+            0.0627, 1.2923, 0.3383, 0.1088,   # Index
+            0.0724, 1.1983, 0.1551, 0.1499,   # Middle
+            0.1343, 1.1736, 0.5355, 0.2164,   # Ring
+        ], dtype=np.float64)
 
         # state
         self.action_scale = 1.0 / 24.0
@@ -135,23 +142,18 @@ class RightHardwarePlayer:
 
     def _post_physics_step(self, obses):
         # 1) Normalize current observation (obses: (16,) or (1,16) tensor on self.device)
-        #    Ensure the result is (1,16)
         cur_obs = self._unscale(
             obses.view(-1), self.allegro_dof_lower, self.allegro_dof_upper
         ).view(1, 16)
 
         # 2) Roll obs_buf (96 = 32*3)
-        #    [0:64] <- [32:96],  [64:80] <- cur_obs,  [80:96] <- cur_target
-        #    ⚠️ To prevent overlap: first clone() the source part to store it temporarily
-        src64 = self.obs_buf[:, 32:96].clone()     # (1,64)
-        self.obs_buf[:, 0:64] = src64              # Pull to the front 64 cells
-        self.obs_buf[:, 64:80] = cur_obs           # Current observation (normalized)
-        self.obs_buf[:, 80:96] = self.cur_target   # Latest target (rad)
+        src64 = self.obs_buf[:, 32:96].clone()
+        self.obs_buf[:, 0:64] = src64
+        self.obs_buf[:, 64:80] = cur_obs
+        self.obs_buf[:, 80:96] = self.cur_target
 
         # 3) Roll proprio_hist_buf (T=30)
-        #    [:, 0:-1, :] <- [:, 1:, :];  at the last step [cur_obs | cur_target]
-        #    ⚠️ To prevent overlap within the same tensor: clone() the source
-        src_hist = self.proprio_hist_buf[:, 1:, :].clone()  # (1,29,32)
+        src_hist = self.proprio_hist_buf[:, 1:, :].clone()
         self.proprio_hist_buf[:, 0:-1, :] = src_hist
         self.proprio_hist_buf[:, -1, :16] = cur_obs
         self.proprio_hist_buf[:, -1, 16:32] = self.cur_target
@@ -174,17 +176,15 @@ class RightHardwarePlayer:
         # 3) update target
         self._pre_physics_step(action)
 
-        # 4) publish command (convert when sending to CPU only)
+        # 4) publish command (hora -> ros2 direct)
         cmd = self.cur_target.detach().to("cpu").numpy()[0]
-        ros1 = _action_hora2allegro(cmd)
-        ros2 = _reorder_imrt2timr(ros1)
-        self.allegro.command_joint_position(ros2)
+        ros2_cmd = _action_hora2ros2_right(cmd)
+        self.allegro.command_joint_position(ros2_cmd)
 
-        # 5) non-blocking obs update (use last valid observation on drop)
+        # 5) non-blocking obs update (ros2 -> hora direct)
         q_pos = self.allegro.poll_joint_position(wait=False, timeout=0.0)
         if q_pos is not None:
-            ros1_q = _reorder_timr2imrt(q_pos)
-            hora_q = _obs_allegro2hora(ros1_q)
+            hora_q = _obs_ros22hora_right(q_pos)
             obs_q = torch.from_numpy(hora_q.astype(np.float32)).to(self.device)
             self._last_obs_q = obs_q
         else:
@@ -200,14 +200,12 @@ class RightHardwarePlayer:
         else:
             dt = t0 - self._last_step_t
             self._last_step_t = t0
-            # Print only once every 5 seconds
             if int(time.time()) % 5 == 0:
                 hz_est = 1.0 / max(dt, 1e-6)
                 print(f"[timer] {hz_est:.2f} Hz, skipped={self._skipped}")
 
     # ---------- deploy ----------
     def deploy(self):
-
         run_start_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
         print(f"🧠 Starting RightHardwarePlayer deployment at {run_start_time}...")
 
@@ -218,8 +216,7 @@ class RightHardwarePlayer:
         warmup = int(self.hz * 8)
         for t in range(warmup):
             tprint(f"setup {t} / {warmup}")
-            pose = _reorder_imrt2timr(np.array(self.init_pose, dtype=np.float64))
-            self.allegro.command_joint_position(pose)
+            self.allegro.command_joint_position(self.init_pose_ros2)
             time.sleep(1.0 / self.hz)
 
         # First observation (blocking once — initialization stability)
@@ -229,8 +226,7 @@ class RightHardwarePlayer:
             stop_allegro_io(self.allegro)
             return
 
-        ros1_q = _reorder_timr2imrt(q_pos)
-        hora_q = _obs_allegro2hora(ros1_q)
+        hora_q = _obs_ros22hora_right(q_pos)
         obs_q = torch.from_numpy(hora_q.astype(np.float32)).to(self.device)
         self._last_obs_q = obs_q
 
@@ -266,9 +262,7 @@ class RightHardwarePlayer:
             except Exception:
                 pass
             try:
-                # Go to init_pose instead of safe pose
-                pose = _reorder_imrt2timr(np.array(self.init_pose, dtype=np.float64))
-                self.allegro.go_safe(pose)
+                self.allegro.go_safe(self.init_pose_ros2)
                 time.sleep(1.0)
             except Exception:
                 pass
@@ -277,7 +271,6 @@ class RightHardwarePlayer:
 
             run_end_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
 
-            # Calculate elapsed time more clearly (HH:MM:SS) using the start/end timestamps
             fmt = "%Y-%m-%d %H:%M:%S"
             try:
                 t0 = time.mktime(time.strptime(run_start_time, fmt))
@@ -287,7 +280,6 @@ class RightHardwarePlayer:
                 mins, secs = divmod(rem, 60)
                 print(f"🧠 Total Running Time: {hrs:02d}:{mins:02d}:{secs:02d}")
             except Exception:
-                # Fallback: print raw start/end strings if parsing fails
                 print(f"🔥 Run started at {run_start_time}, ended at {run_end_time}")
 
     # ---------- checkpoint ----------
@@ -302,7 +294,6 @@ class RightHardwarePlayer:
 # Execution example
 # =========================================================
 if __name__ == "__main__":
-    # Example: If CUDA is not available, change device to "cpu"
     agent = RightHardwarePlayer(hz=20.0, device="cuda" if torch.cuda.is_available() else "cpu")
     # Load checkpoint if necessary
     # agent.restore("/path/to/checkpoint.pth")

@@ -32,8 +32,6 @@ def main(config: DictConfig):
     checkpoint_left = config.get('checkpoint_left', None)
     checkpoint_single = config.get('checkpoint', None)
 
-    breakpoint()
-
     # Two-hand mode: if checkpoint_right or checkpoint_left is specified
     if checkpoint_right is not None or checkpoint_left is not None:
         # Two-hand mode
