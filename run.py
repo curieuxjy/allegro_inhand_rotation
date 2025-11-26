@@ -4,13 +4,15 @@
 # This software is licensed under the MIT License.
 # See the LICENSE file in the project root for full license text.
 
+import os
+import sys
+import subprocess
 import hydra
 
 from omegaconf import DictConfig, OmegaConf
 from hora.utils.misc import set_np_formatting, set_seed
 from hora.algo.deploy.deploy_ros2_right import RightHardwarePlayer
 from hora.algo.deploy.deploy_ros2_left import LeftHardwarePlayer
-from hora.algo.deploy.deploy_ros2_two_hands import HardwarePlayerTwoHands
 
 
 # OmegaConf & Hydra Config
@@ -34,9 +36,7 @@ def main(config: DictConfig):
 
     # Two-hand mode: if checkpoint_right or checkpoint_left is specified
     if checkpoint_right is not None or checkpoint_left is not None:
-        # Two-hand mode
-        debug = config.get('debug', False)
-
+        # Two-hand mode using subprocess launcher
         # Use checkpoint_single as fallback for checkpoint_right if not specified
         if checkpoint_right is None:
             checkpoint_right = checkpoint_single
@@ -44,9 +44,24 @@ def main(config: DictConfig):
         if checkpoint_right is None:
             raise ValueError("checkpoint_right (or checkpoint) must be specified for two-hand mode")
 
-        agent = HardwarePlayerTwoHands(debug=debug)
-        agent.restore(checkpoint_right, checkpoint_left)
-        agent.deploy()
+        # If checkpoint_left is not specified, use checkpoint_right
+        if checkpoint_left is None:
+            checkpoint_left = checkpoint_right
+
+        hz = config.get('hz', 20.0)
+        device = config.get('device', 'cuda')
+
+        # Call the subprocess launcher
+        cmd = [
+            sys.executable, "-m", "hora.algo.deploy.deploy_ros2_two_hands",
+            "--checkpoint-right", checkpoint_right,
+            "--checkpoint-left", checkpoint_left,
+            "--hz", str(hz),
+            "--device", device,
+        ]
+        print(f"Launching two-hands deployment...")
+        print(f"Command: {' '.join(cmd)}")
+        subprocess.run(cmd)
     else:
         # Single-hand mode
         if checkpoint_single is None:
