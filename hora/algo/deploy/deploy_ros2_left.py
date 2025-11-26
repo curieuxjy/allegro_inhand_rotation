@@ -305,7 +305,10 @@ class LeftHardwarePlayer:
             except Exception:
                 pass
             try:
-                self.allegro.go_safe()
+                # Go to init_pose instead of safe pose
+                pose = _reorder_imrt2timr(np.array(self.init_pose, dtype=np.float64))
+                self.allegro.go_safe(pose)
+                time.sleep(1.0)
             except Exception:
                 pass
             stop_allegro_io(self.allegro)

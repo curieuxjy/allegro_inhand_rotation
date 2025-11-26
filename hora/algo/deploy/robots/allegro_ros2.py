@@ -212,9 +212,10 @@ class AllegroHandIO(Node):
         return None
 
 
-    def go_safe(self):
-        # fix: use correct method name
-        self.command_joint_position(self.safe_pose)
+    def go_safe(self, pose=None):
+        """Go to safe pose or a custom pose if provided."""
+        target_pose = pose if pose is not None else self.safe_pose
+        self.command_joint_position(target_pose)
 
     def _on_js(self, msg: JointState):
         self._last_js = msg

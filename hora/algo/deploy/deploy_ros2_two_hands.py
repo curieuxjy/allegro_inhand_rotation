@@ -412,8 +412,11 @@ class HardwarePlayerTwoHands:
             except Exception:
                 pass
             try:
-                self.allegro_ios["right"].go_safe()
-                self.allegro_ios["left"].go_safe()
+                # Go to init_pose instead of safe pose
+                pose = _reorder_imrt2timr(np.array(self.init_pose, dtype=np.float64))
+                self.allegro_ios["right"].go_safe(pose)
+                self.allegro_ios["left"].go_safe(pose)
+                time.sleep(1.0)
             except Exception:
                 pass
             stop_allegro_ios(self.allegro_ios)
