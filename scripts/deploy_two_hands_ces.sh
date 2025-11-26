@@ -6,8 +6,8 @@ source /opt/ros/humble/setup.bash
 
 echo "=== Two Hands Deployment (CES) ==="
 
-TASK_RIGHT="RightCorlAllegroHandHora"
-CACHE_RIGHT="run_400_1014"
+TASK_RIGHT="RightAllegroHandHora"
+CACHE_RIGHT="public"
 TASK_LEFT="LeftTipAllegroHandHora"
 CACHE_LEFT="left_1121"
 
