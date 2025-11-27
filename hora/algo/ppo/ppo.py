@@ -126,6 +126,7 @@ class PPO(object):
         self.agent_steps = 0
         self.max_agent_steps = self.ppo_config["max_agent_steps"]
         self.best_rewards = -10000
+        self.is_resume = False
         # ---- Timing
         self.data_collect_time = 0
         self.rl_train_time = 0
@@ -232,22 +233,28 @@ class PPO(object):
             )
             checkpoint_name = f"ep_{self.epoch_num}_step_{int(self.agent_steps // 1e6):04}M_reward_{mean_rewards:.2f}"
 
+            # Determine checkpoint suffix based on resume status
+            suffix = "_resume" if self.is_resume else ""
+
             if self.save_freq > 0:
                 if self.epoch_num % self.save_freq == 0:
                     self.save(os.path.join(self.nn_dir, checkpoint_name))
-                    self.save(os.path.join(self.nn_dir, "last"))
+                    self.save(os.path.join(self.nn_dir, f"last{suffix}"))
 
             if (mean_rewards > self.best_rewards
                 and self.epoch_num >= self.save_best_after):
                 print(f"save current best reward: {mean_rewards:.2f}")
                 self.best_rewards = mean_rewards
-                self.save(os.path.join(self.nn_dir, "best"))
+                self.save(os.path.join(self.nn_dir, f"best{suffix}"))
 
         print("max steps achieved")
 
     def save(self, name):
         weights = {
             "model": self.model.state_dict(),
+            "epoch_num": self.epoch_num,
+            "agent_steps": self.agent_steps,
+            "best_rewards": self.best_rewards,
         }
         if self.running_mean_std:
             weights["running_mean_std"] = self.running_mean_std.state_dict()
@@ -261,6 +268,15 @@ class PPO(object):
         checkpoint = torch.load(fn)
         self.model.load_state_dict(checkpoint["model"])
         self.running_mean_std.load_state_dict(checkpoint["running_mean_std"])
+        # Restore training state if available (for resume training)
+        if "epoch_num" in checkpoint:
+            self.epoch_num = checkpoint["epoch_num"]
+            self.agent_steps = checkpoint["agent_steps"]
+            self.best_rewards = checkpoint["best_rewards"]
+            self.is_resume = True
+            print(f"Resumed from epoch {self.epoch_num}, agent_steps {self.agent_steps}, best_rewards {self.best_rewards:.2f}")
+        else:
+            self.is_resume = False
 
     def restore_test(self, fn):
         checkpoint = torch.load(fn)

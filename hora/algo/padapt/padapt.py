@@ -69,6 +69,7 @@ class ProprioAdapt(object):
         self.mean_eps_length = AverageScalarMeter(window_size=20000)
         self.best_rewards = -10000
         self.agent_steps = 0
+        self.is_resume = False
         self.max_agent_steps = self.ppo_config["max_agent_steps"] # get rid of hardcoded 1e9
         # ---- Snapshot ----
         self.save_freq = self.ppo_config.get("save_frequency", 500)  # Use config or default to 500
@@ -174,17 +175,20 @@ class ProprioAdapt(object):
             mean_rewards = self.mean_eps_reward.get_mean()
             checkpoint_name = f"ep_{self.epoch_num}_step_{int(self.agent_steps / 1e6):04}M_reward_{mean_rewards:.2f}"
 
+            # Determine checkpoint suffix based on resume status
+            suffix = "_resume" if self.is_resume else ""
+
             if self.save_freq > 0:
                 if self.epoch_num % self.save_freq == 0:
                     self.save(os.path.join(self.nn_dir, checkpoint_name))
-                    self.save(os.path.join(self.nn_dir, "last"))
+                    self.save(os.path.join(self.nn_dir, f"last{suffix}"))
 
             # Save best checkpoint
             if (mean_rewards > self.best_rewards
                 and self.epoch_num >= self.save_best_after):
                 print(f"save current best reward: {mean_rewards:.2f}")
                 self.best_rewards = mean_rewards
-                self.save(os.path.join(self.nn_dir, "best"))
+                self.save(os.path.join(self.nn_dir, f"best{suffix}"))
 
             all_fps = self.agent_steps / (time.time() - _t)
             last_fps = self.batch_size / (time.time() - _last_t)
@@ -211,6 +215,18 @@ class ProprioAdapt(object):
         cprint("careful, using non-strict matching", "red", attrs=["bold"])
         self.model.load_state_dict(checkpoint["model"], strict=False)
         self.running_mean_std.load_state_dict(checkpoint["running_mean_std"])
+        # Restore training state if available (for resume training)
+        if "epoch_num" in checkpoint:
+            self.epoch_num = checkpoint["epoch_num"]
+            self.agent_steps = checkpoint["agent_steps"]
+            self.best_rewards = checkpoint["best_rewards"]
+            self.is_resume = True
+            # Also restore sa_mean_std if available
+            if "sa_mean_std" in checkpoint:
+                self.sa_mean_std.load_state_dict(checkpoint["sa_mean_std"])
+            print(f"Resumed from epoch {self.epoch_num}, agent_steps {self.agent_steps}, best_rewards {self.best_rewards:.2f}")
+        else:
+            self.is_resume = False
 
     def restore_test(self, fn):
         if not fn:
@@ -223,6 +239,9 @@ class ProprioAdapt(object):
     def save(self, name):
         weights = {
             "model": self.model.state_dict(),
+            "epoch_num": self.epoch_num,
+            "agent_steps": self.agent_steps,
+            "best_rewards": self.best_rewards,
         }
         if self.running_mean_std:
             weights["running_mean_std"] = self.running_mean_std.state_dict()
