@@ -214,7 +214,7 @@ class RightHardwarePlayer:
         self.allegro = start_allegro_io(side='right', use_side_prefix=self.use_side_prefix)
 
         # Warm-up (blocking) — settle hardware
-        warmup = int(self.hz * 8)
+        warmup = int(self.hz * 12)
         for t in range(warmup):
             tprint(f"setup {t} / {warmup}")
             self.allegro.command_joint_position(self.init_pose_ros2)
