@@ -103,6 +103,15 @@ def main(config: DictConfig):
         ) as f:
             f.write(OmegaConf.to_yaml(config))
 
+        # Also save config to checkpoint folder for easy reference
+        nn_dir = os.path.join(
+            output_dif,
+            "stage1_nn" if config.train.algo == "PPO" else "stage2_nn"
+        )
+        os.makedirs(nn_dir, exist_ok=True)
+        with open(os.path.join(nn_dir, "config.yaml"), "w") as f:
+            f.write(OmegaConf.to_yaml(config))
+
         # check whether execute train by mistake:
         best_ckpt_path = os.path.join(
             "outputs",
