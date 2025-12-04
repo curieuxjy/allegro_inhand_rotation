@@ -21,7 +21,7 @@ echo "EXTRA_ARGS: ${EXTRA_ARGS}"
 
 CUDA_VISIBLE_DEVICES=${GPUS} \
 python train.py task=${TASK} headless=True seed=${SEED} \
-task.env.numEnvs=20000 \
+task.env.numEnvs=20480 \
 task.env.forceScale=2 task.env.randomForceProbScalar=0.25 \
 train.algo=ProprioAdapt \
 train.ppo.priv_info=True train.ppo.proprio_adapt=True \
