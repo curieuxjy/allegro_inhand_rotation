@@ -74,6 +74,7 @@ class ProprioAdapt(object):
         # ---- Snapshot ----
         self.save_freq = self.ppo_config.get("save_frequency", 500)  # Use config or default to 500
         self.save_best_after = self.ppo_config.get("save_best_after", 0)
+        self.resume = self.ppo_config.get("resume", True)  # Whether to resume training state from checkpoint
         # ---- Optim ----
         # --- The core of Stage 2: Train only the adaptation module ---
         # Most of the parameters of the model learned in Stage 1 are frozen (set not to be trained).
@@ -216,7 +217,8 @@ class ProprioAdapt(object):
         self.model.load_state_dict(checkpoint["model"], strict=False)
         self.running_mean_std.load_state_dict(checkpoint["running_mean_std"])
         # Restore training state if available (for resume training)
-        if "epoch_num" in checkpoint:
+        # Only resume if self.resume is True (controlled by train.ppo.resume config)
+        if self.resume and "epoch_num" in checkpoint:
             self.epoch_num = checkpoint["epoch_num"]
             self.agent_steps = checkpoint["agent_steps"]
             self.best_rewards = checkpoint["best_rewards"]
@@ -227,6 +229,7 @@ class ProprioAdapt(object):
             print(f"Resumed from epoch {self.epoch_num}, agent_steps {self.agent_steps}, best_rewards {self.best_rewards:.2f}")
         else:
             self.is_resume = False
+            print(f"Loaded model weights from {fn} (fresh start, no training state restored)")
 
     def restore_test(self, fn):
         if not fn:

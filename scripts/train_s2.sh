@@ -25,6 +25,7 @@ task.env.numEnvs=20000 \
 task.env.forceScale=2 task.env.randomForceProbScalar=0.25 \
 train.algo=ProprioAdapt \
 train.ppo.priv_info=True train.ppo.proprio_adapt=True \
+train.ppo.resume=False \
 train.ppo.output_name=${TASK}/"${CACHE}" \
 checkpoint=outputs/${TASK}/"${CACHE}"/stage1_nn/best.pth \
 ${EXTRA_ARGS}
