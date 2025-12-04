@@ -292,6 +292,25 @@ Train the student policy using proprioceptive adaptation:
 # Arguments: GPU_ID SEED RUN_NAME
 ```
 
+#### Resume Training
+
+If training is interrupted, you can resume from the last checkpoint:
+
+**Resume Stage 1:**
+```bash
+./scripts/resume_s1.sh
+# Interactive prompts will ask for: GPU, TASK, SEED, CACHE, CHECKPOINT
+# Default checkpoint: last.pth (or specify best.pth)
+```
+
+**Resume Stage 2:**
+```bash
+./scripts/resume_s2.sh
+# Same interactive prompts as resume_s1.sh
+```
+
+> **Note**: `train_s2.sh` uses `train.ppo.resume=False` by default, which loads Stage 1 weights but starts training from epoch 0. The `resume_s2.sh` script uses the default `resume=True` to continue from where Stage 2 left off.
+
 
 ### Test in Simulation
 
