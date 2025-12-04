@@ -20,8 +20,8 @@ echo "GPUS: ${GPUS}, TASK: ${TASK}, SEED: ${SEED}, CACHE: ${CACHE}"
 echo "EXTRA_ARGS: ${EXTRA_ARGS}"
 
 CUDA_VISIBLE_DEVICES=${GPUS} \
-python train.py task=${TASK} headless=True seed=${SEED} \
-task.env.numEnvs=4 train.ppo.minibatch_size=32 \
+python train.py task=${TASK} headless=False seed=${SEED} \
+task.env.numEnvs=1 train.ppo.minibatch_size=8 \
 task.env.forceScale=2 task.env.randomForceProbScalar=0.25 \
 train.algo=PPO \
 train.ppo.priv_info=True train.ppo.proprio_adapt=False \
