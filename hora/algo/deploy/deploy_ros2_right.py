@@ -285,7 +285,7 @@ class RightHardwarePlayer:
 
     # ---------- checkpoint ----------
     def restore(self, fn):
-        ckpt = torch.load(fn, map_location=self.device)
+        ckpt = torch.load(fn, map_location=self.device, weights_only=False)
         self.running_mean_std.load_state_dict(ckpt["running_mean_std"])
         self.model.load_state_dict(ckpt["model"])
         self.sa_mean_std.load_state_dict(ckpt["sa_mean_std"])
