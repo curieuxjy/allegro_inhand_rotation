@@ -9,7 +9,7 @@ echo "=== Two Hands Deployment (CES) ==="
 TASK_RIGHT="RightAllegroHandHora"
 CACHE_RIGHT="public"
 TASK_LEFT="LeftAllegroHandHora"
-CACHE_LEFT="left_1201_3-1"
+CACHE_LEFT="left_reverse_1205"
 
 
 CHECKPOINT_RIGHT="outputs/${TASK_RIGHT}/${CACHE_RIGHT}/stage2_nn/best.pth"
